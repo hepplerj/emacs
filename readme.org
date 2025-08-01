@@ -1,6 +1,10 @@
 #+title: Emacs Writing Studio
 #+author: Peter Prevos
 
+/This is my configuration of the Emacs Writing Studio./
+
+---
+
 /Emacs Writing Studio/ by Peter Prevos is a configuration and comprehensive manual for writers seeking an integrated research, writing and publication tool. The EWS book discusses everything from researching and organising ideas and writing without distractions to publishing in multiple formats. EWS is useful to beginners and experienced Emacs users, offering practical tips and a tailored configuration to enhance your writing process.
 
 #+attr_html: :alt Emacs Writing Studio logo :title Emacs Writing Studio logo :width 400
