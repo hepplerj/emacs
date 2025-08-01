@@ -215,6 +215,7 @@
   (org-fold-catch-invisible-edits 'show))
 
 (setq org-directory (concat (getenv "HOME") "/Documents/org"))
+(setq org-default-notes-file (concat org-directory "/notes.org"))
 (setq org-log-done 'time)
 
 ;; Advanced queries with org-ql 
@@ -372,17 +373,26 @@
    '(("f" "Fleeting note"
       item
       (file+headline org-default-notes-file "Notes")
-      "- %?")
-     ("p" "Permanent note" plain
-      (file denote-last-path)
-      #'denote-org-capture
-      :no-save t
-      :immediate-finish nil
-      :kill-buffer t
-      :jump-to-captured t)
+      "- %?\n  - Captured: %U")
+     ("F" "Fleeting note with context"
+      item
+      (file+headline org-default-notes-file "Notes")
+      "- %?\n  - Context: %a\n  - Captured: %U")
+     ("p" "Permanent note (org-roam)" plain
+      (function org-roam-node-find)
+      "%?"
+      :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org" "#+title: ${title}\n#+date: %U\n#+filetags: \n\n")
+      :empty-lines 1
+      :unnarrowed t)
      ("t" "New task" entry
       (file+headline org-default-notes-file "Tasks")
-      "* TODO %i%?"))))
+      "* TODO %i%?\n  - Added: %U")
+     ("j" "Journal entry" entry
+      (file+olp+datetree org-default-notes-file "Journal")
+      "* %?\n  - Captured: %U")
+     ("r" "Reading note" item
+      (file+headline org-default-notes-file "Reading")
+      "- %?\n  - Source: %^{Source}\n  - Captured: %U"))))
 
 ;; Org-Roam 
 (use-package org-roam
@@ -479,7 +489,7 @@
 ;; Citar to access bibliographies
 (use-package citar
    :custom
-   (citar-bibliography '("~/Documents/Academia/zotero.bib"))
+   (citar-bibliography '("~/Documents/Academia/library.bib"))
    (citar-notes-paths '("~/Documents/notes/"))
    (citar-open-always-create-notes t)
    (org-cite-insert-processor 'citar)
@@ -516,6 +526,31 @@
 ;; Additional bindings for extracted functionality
 (bind-key "C-c w d s" #'my/org-roam-extract-subtree)
 (bind-key "C-c w d h" #'org-roam-extract-subtree) ; heading extraction
+
+;; Custom functions for fleeting/permanent notes integration
+(defun ews-fleeting-to-permanent ()
+  "Convert current fleeting note item to a permanent org-roam note."
+  (interactive)
+  (let ((content (thing-at-point 'line t)))
+    (when content
+      (kill-whole-line)
+      (org-roam-capture- :node (org-roam-node-create :title (read-string "Title: "))
+                        :templates '(("d" "default" plain "%?"
+                                     :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
+                                                       "#+title: ${title}\n#+date: %U\n#+filetags: fleeting\n\n")
+                                     :unnarrowed t))
+                        :info (list :body content)))))
+
+(defun ews-review-fleeting-notes ()
+  "Open fleeting notes file for review and processing."
+  (interactive)
+  (find-file org-default-notes-file)
+  (goto-char (point-min))
+  (when (search-forward "* Notes" nil t)
+    (org-show-subtree)))
+
+(bind-key "C-c w n f" #'ews-fleeting-to-permanent)
+(bind-key "C-c w n r" #'ews-review-fleeting-notes)
 
 ;; Denote
 
@@ -656,7 +691,7 @@
 (require 'oc-natbib)
 (require 'oc-csl)
 
-(setq org-cite-global-bibliography '("~/Documents/Academia/zotero.bib")
+(setq org-cite-global-bibliography '("~/Documents/Academia/library.bib")
       org-cite-insert-processor 'citar
       org-cite-follow-processor 'citar
       org-cite-activate-processor 'citar)
@@ -798,378 +833,6 @@
      ("\\subsection{%s}" . "\\subsection*{%s}")
      ("\\subsubsection{%s}" . "\\subsubsection*{%s}"))))
 
-;;; ADMINISTRATION
-;; Research note browsing functions using org-roam nodes
-  (defun ews-browse-people-chronologically ()
-    "Browse people notes sorted by birth date."
-    (interactive)
-    (unless (featurep 'org-roam)
-      (require 'org-roam))
-    (let* ((people-nodes (seq-filter
-                          (lambda (node)
-                            (and (member "biography" (org-roam-node-tags node))
-                                 (cdr (assoc-string "BIRTH_DATE" (org-roam-node-properties node)))))
-                          (org-roam-node-list)))
-           (sorted-people (sort people-nodes
-                                (lambda (a b)
-                                  (string< (or (cdr (assoc-string "BIRTH_DATE" (org-roam-node-properties a))) "")
-                                          (or (cdr (assoc-string "BIRTH_DATE" (org-roam-node-properties b))) ""))))))
-      (with-current-buffer (get-buffer-create "*People by Birth Date*")
-        (erase-buffer)
-        (insert "People by Birth Date:\n\n")
-        (dolist (node sorted-people)
-          (let ((date (or (cdr (assoc-string "BIRTH_DATE" (org-roam-node-properties node))) "No date"))
-                (title (org-roam-node-title node))
-                (current-node node))
-            (insert (format "%s  " date))
-            (insert-button title
-                           'action `(lambda (_) (org-roam-node-open ,current-node))
-                           'follow-link t
-                           'face 'link)
-            (insert "\n")))
-        (goto-char (point-min))
-        (display-buffer (current-buffer)))))
-
-
-(defun ews-browse-sources-chronologically-fast (&optional filter-type)
-  "Browse source notes sorted by date, grouped by type (optimized version).
-With optional FILTER-TYPE, show only sources of that type."
-  (interactive)
-  (unless (featurep 'org-roam)
-    (require 'org-roam))
-  
-  ;; Pre-compile regex for better performance
-  (let* ((filter-regex (when filter-type
-                        (concat "source/" (regexp-quote filter-type))))
-         ;; Optimized SQL query with better WHERE clause
-         (sql-query (if filter-type
-                        (format "SELECT nodes.id, nodes.title, nodes.file, nodes.tags,
-                                        COALESCE(properties.value, '9999-12-31') as date_value
-                                 FROM nodes
-                                 LEFT JOIN properties ON nodes.id = properties.node_id 
-                                           AND properties.property = 'DATE'
-                                 WHERE nodes.tags LIKE '%%source%%' 
-                                   AND nodes.tags LIKE '%%%s%%'
-                                 ORDER BY date_value" filter-regex)
-                      "SELECT nodes.id, nodes.title, nodes.file, nodes.tags,
-                              COALESCE(properties.value, '9999-12-31') as date_value
-                       FROM nodes
-                       LEFT JOIN properties ON nodes.id = properties.node_id 
-                                 AND properties.property = 'DATE'
-                       WHERE nodes.tags IS NOT NULL AND nodes.tags LIKE '%source%'
-                       ORDER BY date_value"))
-         (source-data (org-roam-db-query sql-query))
-         ;; Pre-compile source type extraction regex
-         (source-type-regex ".*source/\\([^[:space:]]+\\).*"))
-    
-    (with-current-buffer (get-buffer-create "*Sources by Date*")
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        ;; Build output string in memory first, then insert all at once
-        (let ((output-lines (list
-                            (format "Sources by Date%s:\n\n"
-                                    (if filter-type (format " [%s only]" filter-type) ""))
-                            "Press 'f' to filter by type, 'c' to clear filter, 'q' to quit\n\n"
-                            (format "%-12s %-12s %s\n" "Date" "Type" "Title")
-                            (format "%s %s %s\n"
-                                    (make-string 12 ?-)
-                                    (make-string 12 ?-)
-                                    (make-string 40 ?-)))))
-          
-          ;; Process rows more efficiently
-          (dolist (row source-data)
-            (let* ((title (nth 1 row))
-                   (file (nth 2 row))
-                   (tags (nth 3 row))
-                   (date (let ((d (nth 4 row)))
-                           (if (string= d "9999-12-31") "No date" d)))
-                   (source-type (if (and tags (string-match source-type-regex tags))
-                                   (match-string 1 tags)
-                                 "unknown")))
-              (push (format "%-12s %-12s %s\n" date source-type title)
-                    output-lines)
-              ;; Store file path for button creation
-              (put-text-property 0 (length title) 'file-path file title)))
-          
-          ;; Insert all content at once
-          (insert (apply #'concat (nreverse output-lines)))
-          
-          ;; Create buttons in a second pass (more efficient)
-          (goto-char (point-min))
-          (forward-line 4) ; Skip header
-          (while (not (eobp))
-            (let ((line-start (line-beginning-position))
-                  (line-end (line-end-position)))
-              (when (> line-end line-start)
-                (let* ((line-content (buffer-substring-no-properties line-start line-end))
-                       (title-start (+ line-start 25)) ; After date and type columns
-                       (title-end line-end))
-                  (when (< title-start title-end)
-                    (let ((title (buffer-substring-no-properties title-start title-end))
-                          (file-path (get-text-property title-start 'file-path)))
-                      (when file-path
-                        (make-button title-start title-end
-                                   'action `(lambda (_) (find-file ,file-path))
-                                   'follow-link t
-                                   'face 'link))))))
-              (forward-line 1))))
-        
-        (goto-char (point-min))
-        (forward-line 4) ; Skip header
-        (use-local-map (make-sparse-keymap))
-        (local-set-key (kbd "f") 'ews-sources-filter-by-type-fast)
-        (local-set-key (kbd "c") 'ews-sources-clear-filter-fast)
-        (local-set-key (kbd "q") 'quit-window)
-        (display-buffer (current-buffer))))))
-
-(defun ews-sources-filter-by-type-fast ()
-  "Filter sources by type interactively (optimized version)."
-  (interactive)
-  (let* ((all-types (delete-dups
-                     (mapcar (lambda (tags-string)
-                               (when (and tags-string 
-                                         (string-match "source/\\([^[:space:]]+\\)" tags-string))
-                                 (match-string 1 tags-string)))
-                             (mapcar #'car
-                                     (org-roam-db-query
-                                      "SELECT DISTINCT tags FROM nodes WHERE tags LIKE '%source%'")))))
-         (clean-types (seq-filter #'identity all-types))
-         (filter-type (completing-read "Filter by source type: " clean-types)))
-    (ews-browse-sources-chronologically-fast filter-type)))
-
-(defun ews-sources-clear-filter-fast ()
-  "Clear source type filter and show all sources (optimized version)."
-  (interactive)
-  (ews-browse-sources-chronologically-fast))
-
-;; Alternative approach: Use a cached version that updates periodically
-(defvar ews-source-cache nil
-  "Cache for source data to avoid repeated database queries.")
-
-(defvar ews-source-cache-time nil
-  "Time when source cache was last updated.")
-
-(defun ews-update-source-cache ()
-  "Update the source cache."
-  (setq ews-source-cache
-        (org-roam-db-query
-         "SELECT nodes.id, nodes.title, nodes.file, nodes.tags,
-                 properties.value as date_value
-          FROM nodes
-          LEFT JOIN (
-            SELECT node_id, value 
-            FROM properties 
-            WHERE property = 'DATE'
-          ) properties ON nodes.id = properties.node_id
-          WHERE nodes.tags LIKE '%source%'
-          ORDER BY CASE 
-            WHEN properties.value IS NULL THEN '9999-12-31'
-            ELSE properties.value 
-          END"))
-  (setq ews-source-cache-time (current-time)))
-
-(defun ews-browse-sources-cached (&optional filter-type force-refresh)
-  "Browse sources using cached data (fastest version).
-With FORCE-REFRESH, update cache first."
-  (interactive "P")
-  (when (or force-refresh
-            (null ews-source-cache)
-            (null ews-source-cache-time)
-            (> (float-time (time-subtract (current-time) ews-source-cache-time)) 300)) ; 5 minutes
-    (message "Updating source cache...")
-    (ews-update-source-cache))
-  
-  (let ((filtered-data (if filter-type
-                           (seq-filter
-                            (lambda (row)
-                              (let ((tags (nth 3 row)))
-                                (and tags (string-match-p 
-                                          (concat "source/" (regexp-quote filter-type))
-                                          tags))))
-                            ews-source-cache)
-                         ews-source-cache)))
-    
-    (with-current-buffer (get-buffer-create "*Sources by Date*")
-      (erase-buffer)
-      (insert (format "Sources by Date%s:\n\n"
-                      (if filter-type (format " [%s only]" filter-type) "")))
-      (insert "Press 'f' to filter, 'c' to clear filter, 'r' to refresh cache, 'q' to quit\n\n")
-
-      ;; Create header
-      (insert (format "%-12s %-12s %s\n" "Date" "Type" "Title"))
-      (insert (format "%s %s %s\n"
-                      (make-string 12 ?-)
-                      (make-string 12 ?-)
-                      (make-string 40 ?-)))
-
-      ;; Add rows  
-      (dolist (row filtered-data)
-        (let* ((title (nth 1 row))
-               (file (nth 2 row))
-               (tags (nth 3 row))
-               (date (or (nth 4 row) "No date"))
-               (source-type (if tags
-                               (replace-regexp-in-string
-                                ".*source/\\([^[:space:]]+\\).*" "\\1"
-                                tags)
-                             "unknown")))
-          (insert (format "%-12s %-12s " date source-type))
-          (insert-button title
-                         'action `(lambda (_) (find-file ,file))
-                         'follow-link t
-                         'face 'link)
-          (insert "\n")))
-
-      (goto-char (point-min))
-      (forward-line 4)
-      (use-local-map (make-sparse-keymap))
-      (local-set-key (kbd "f") 'ews-sources-filter-cached)
-      (local-set-key (kbd "c") (lambda () (interactive) (ews-browse-sources-cached nil)))
-      (local-set-key (kbd "r") (lambda () (interactive) (ews-browse-sources-cached nil t)))
-      (local-set-key (kbd "q") 'quit-window)
-      (display-buffer (current-buffer)))))
-
-(defun ews-sources-filter-cached ()
-  "Filter cached sources by type."
-  (interactive)
-  (let* ((all-types (delete-dups
-                     (mapcar (lambda (row)
-                               (let ((tags (nth 3 row)))
-                                 (when (and tags 
-                                           (string-match "source/\\([^[:space:]]+\\)" tags))
-                                   (match-string 1 tags))))
-                             ews-source-cache)))
-         (clean-types (seq-filter #'identity all-types))
-         (filter-type (completing-read "Filter by source type: " clean-types)))
-    (ews-browse-sources-cached filter-type)))
-
- (defun ews-browse-sources-chronologically (&optional filter-type)
-    "Browse source notes sorted by date, grouped by type.
-  With optional FILTER-TYPE, show only sources of that type."
-    (interactive)
-    (unless (featurep 'org-roam)
-      (require 'org-roam))
-    (let* ((source-nodes (seq-filter
-                          (lambda (node)
-                            (seq-some (lambda (tag) (string-match-p "^source" tag))
-                                     (org-roam-node-tags node)))
-                          (org-roam-node-list)))
-           (nodes-with-dates (mapcar
-                              (lambda (node)
-                                (let ((date (with-temp-buffer
-                                              (insert-file-contents (org-roam-node-file node))
-                                              (org-mode)
-                                              (goto-char (point-min))
-                                              (when (re-search-forward ":DATE: *\\(\\[?[0-9-]+\\]?\\)" nil t)
-                                                (let ((date-str (match-string 1)))
-                                                  ;; Remove brackets if present
-                                                  (replace-regexp-in-string "\\[\\|\\]" "" date-str))))))
-                                  (cons node date)))
-                              source-nodes))
-           (filtered-nodes (if filter-type
-                               (seq-filter
-                                (lambda (node-date-pair)
-                                  (seq-some (lambda (tag) (string-equal tag (concat "source/" filter-type)))
-                                           (org-roam-node-tags (car node-date-pair))))
-                                nodes-with-dates)
-                             nodes-with-dates))
-           (sorted-sources (sort filtered-nodes
-                                 (lambda (a b)
-                                   (let ((date-a (or (cdr a) "9999-12-31"))
-                                         (date-b (or (cdr b) "9999-12-31")))
-                                     (string< date-a date-b))))))
-      (with-current-buffer (get-buffer-create "*Sources by Date*")
-        (erase-buffer)
-        (insert (format "Sources by Date%s:\n\n"
-                        (if filter-type (format " [%s only]" filter-type) "")))
-        (insert "Press 'f' to filter by type, 'c' to clear filter, 'q' to quit\n\n")
-
-        ;; Create header
-        (insert (format "%-12s %-12s %s\n" "Date" "Type" "Title"))
-        (insert (format "%s %s %s\n"
-                        (make-string 12 ?-)
-                        (make-string 12 ?-)
-                        (make-string 40 ?-)))
-
-        ;; Add rows with proper alignment
-        (dolist (node-date-pair sorted-sources)
-          (let* ((node (car node-date-pair))
-                 (date (or (cdr node-date-pair) "No date"))
-                 (source-type (replace-regexp-in-string
-                               "source/" ""
-                               (or (seq-find (lambda (tag) (string-match-p "^source/" tag))
-                                             (org-roam-node-tags node))
-                                   "source")))
-                 (title (org-roam-node-title node))
-                 (current-node node))
-            (insert (format "%-12s %-12s " date source-type))
-            (insert-button title
-                           'action `(lambda (_) (org-roam-node-open ,current-node))
-                           'follow-link t
-                           'face 'link)
-            (insert "\n")))
-
-        (goto-char (point-min))
-        (forward-line 4) ; Skip header
-        (use-local-map (make-sparse-keymap))
-        (local-set-key (kbd "f") 'ews-sources-filter-by-type)
-        (local-set-key (kbd "c") 'ews-sources-clear-filter)
-        (local-set-key (kbd "q") 'quit-window)
-        (display-buffer (current-buffer)))))
-
-(defun ews-sources-filter-by-type ()
-    "Filter sources by type interactively."
-    (interactive)
-    (let* ((all-types (delete-dups
-                       (mapcar (lambda (node)
-                                 (replace-regexp-in-string
-                                  "source/" ""
-                                  (or (seq-find (lambda (tag) (string-match-p "^source/" tag))
-                                                (org-roam-node-tags node))
-                                      "source")))
-                               (seq-filter
-                                (lambda (node)
-                                  (seq-some (lambda (tag) (string-match-p "^source" tag))
-                                           (org-roam-node-tags node)))
-                                (org-roam-node-list)))))
-           (filter-type (completing-read "Filter by source type: " all-types)))
-      (ews-browse-sources-chronologically filter-type)))
-
-  (defun ews-sources-clear-filter ()
-    "Clear source type filter and show all sources."
-    (interactive)
-    (ews-browse-sources-chronologically))
-
-  (defun ews-browse-archives-chronologically ()
-    "Browse archive notes sorted by date."
-    (interactive)
-    (unless (featurep 'org-roam)
-      (require 'org-roam))
-    (let* ((archive-nodes (seq-filter
-                           (lambda (node)
-                             (and (member "archive" (org-roam-node-tags node))
-                                  (cdr (assoc-string "DATE" (org-roam-node-properties node)))))
-                           (org-roam-node-list)))
-           (sorted-archives (sort archive-nodes
-                                  (lambda (a b)
-                                    (string< (or (cdr (assoc-string "DATE" (org-roam-node-properties a))) "")
-                                            (or (cdr (assoc-string "DATE" (org-roam-node-properties b))) ""))))))
-      (with-current-buffer (get-buffer-create "*Archives by Date*")
-        (erase-buffer)
-        (insert "Archives by Date:\n\n")
-        (dolist (node sorted-archives)
-          (let ((date (or (cdr (assoc-string "DATE" (org-roam-node-properties node))) "No date"))
-                (title (org-roam-node-title node))
-                (current-node node))
-            (insert (format "%s  " date))
-            (insert-button title
-                           'action `(lambda (_) (org-roam-node-open ,current-node))
-                           'follow-link t
-                           'face 'link)
-            (insert "\n")))
-        (goto-char (point-min))
-        (display-buffer (current-buffer)))))
-
 ;; Bind org agenda command and custom agenda
 (use-package org
     :custom
@@ -1195,49 +858,105 @@ With FORCE-REFRESH, update cache first."
     :bind
     (("C-c a" . org-agenda)))
 
-;; Add separate key bindings for the org-roam functions
-(global-set-key (kbd "C-c w a a") 'ews-browse-archives-chronologically)  ; archives
-(global-set-key (kbd "C-c w a p") 'ews-browse-people-chronologically)    ; people
-(global-set-key (kbd "C-c w a s") 'ews-browse-sources-chronologically)   ; sources
+;; Set your Org-roam directory
+(setq org-roam-directory "~/Documents/notes")
 
-(defun jh/list-org-roam-source-notes-by-date ()
-  "List org-roam notes with a :DATE: property and 'source' in FILETAGS, sorted chronologically in an Org table."
+(defvar jh/org-roam-source-notes-cache nil)
+(defvar jh/org-roam-source-notes-cache-time nil)
+(defvar jh/org-roam-source-notes-cache-ttl 300) ;; cache for 5 minutes
+(defvar jh/org-roam-source-notes-current-filter "")
+
+(defun jh/refresh-org-roam-source-notes-cache ()
+  "Refresh the cached list of org-roam source notes."
   (interactive)
-  (let* ((notes-dir "~/Documents/notes/")  ;; Set this to your org-roam directory
+  (message "Refreshing org-roam source notes cache...")
+  (let* ((notes-dir org-roam-directory)
          (files (directory-files-recursively notes-dir "\\.org$"))
          (results '()))
     (dolist (file files)
       (with-temp-buffer
         (insert-file-contents file)
-        (let ((date (when (re-search-forward "^:DATE: *\\(.*\\)" nil t)
-                      (match-string 1)))
-              (filetags (when (re-search-forward "^#\\+FILETAGS: *\\(.*\\)" nil t)
-                          (match-string 1)))
-              (title (progn
+        (let* ((title (progn
+                        (goto-char (point-min))
+                        (when (re-search-forward "^#\\+TITLE: *\\(.*\\)" nil t)
+                          (match-string 1))))
+               (date (progn
                        (goto-char (point-min))
-                       (when (re-search-forward "^#\\+TITLE: *\\(.*\\)" nil t)
-                         (match-string 1)))))
-          (when (and date filetags (string-match-p "source" filetags))
-            (push (list date file title) results)))))
-    ;; Sort by date string
-    (setq results (sort results (lambda (a b)
-                                  (string< (car a) (car b)))))
-    ;; Output
+                       (if (re-search-forward "^:DATE: *\\(.*\\)" nil t)
+                           (match-string 1)
+                         "No date")))
+               (filetags (progn
+                           (goto-char (point-min))
+                           (when (re-search-forward "^#\\+FILETAGS: *\\(.*\\)" nil t)
+                             (match-string 1))))
+               (source (progn
+                         (when filetags
+                           (when (string-match "source/\\([^:]+\\)" filetags)
+                             (match-string 1 filetags))))))
+          (when (and filetags
+                     (string-match-p "source" filetags))
+            (push (list date file title filetags source) results)))))
+    (setq jh/org-roam-source-notes-cache results)
+    (setq jh/org-roam-source-notes-cache-time (current-time))))
+
+(defun jh/list-org-roam-source-notes-by-date (&optional filter)
+  "List cached org-roam source notes, optionally FILTERed by subtype like 'letter' or 'newspaper'."
+  (interactive
+   (let* ((tags
+           (delete-dups
+            (cl-loop for entry in jh/org-roam-source-notes-cache
+                     for filetags = (nth 3 entry)
+                     when (and filetags (string-match "source/\\([^:]+\\)" filetags))
+                     collect (match-string 1 filetags)))))
+     (list
+      (completing-read
+       "Filter by source subtype (leave blank for all): "
+       tags nil t))))
+
+
+  ;; Use cache if stale
+  (when (or (not jh/org-roam-source-notes-cache)
+            (not jh/org-roam-source-notes-cache-time)
+            (> (float-time (time-subtract (current-time) jh/org-roam-source-notes-cache-time))
+               jh/org-roam-source-notes-cache-ttl))
+    (jh/refresh-org-roam-source-notes-cache))
+
+  (let* ((filtered
+          (cl-remove-if-not
+           (lambda (entry)
+             (let ((tags (nth 3 entry)))
+               (or (string= filter "")
+                   (and tags (string-match-p (concat "source/" (regexp-quote filter)) tags)))))
+           jh/org-roam-source-notes-cache))
+         (sorted
+          (sort filtered
+                (lambda (a b)
+                  (let ((d1 (car a))
+                        (d2 (car b)))
+                    (cond
+                     ((string= d1 "No date") nil)
+                     ((string= d2 "No date") t)
+                     (t (string< d1 d2))))))))
+
+    ;; Output buffer
     (with-current-buffer (get-buffer-create "*Chronological Source Notes*")
+      (read-only-mode -1)
       (erase-buffer)
       (insert "* Chronological Source Notes\n\n")
-      (insert "| DATE       | TITLE                            |\n")
-      (insert "|------------+----------------------------------|\n")
-      (dolist (entry results)
+      (insert (format "%-10s   %-15s   %s\n" "DATE" "SOURCE" "TITLE"))
+      (insert (make-string 80 ?-) "\n")
+      (dolist (entry sorted)
         (let ((date (nth 0 entry))
               (path (nth 1 entry))
-              (title (nth 2 entry)))
-          (insert (format "| %s | [[file:%s][%s]] |\n"
-                          date path title))))
-      (org-mode)
+              (title (nth 2 entry))
+              (source (or (nth 4 entry) "unknown")))
+          (insert (format "%-10s   %-15s   [[file:%s][%s]]\n" date source path title))))
       (goto-char (point-min))
-      (org-table-align)
+      (org-mode)
+      (read-only-mode 1)
       (switch-to-buffer (current-buffer)))))
+
+
 
 
 (setq org-todo-keywords
