@@ -211,10 +211,10 @@
 (add-hook 'prog-mode 'whitespace-mode)
 
 ;; Fonts 
-(defvar jah/font-height 115)
+(defvar jah/font-height 110)
 
 (when (eq system-type 'darwin)
-  (setq jah/font-height 120))
+  (setq jah/font-height 110))
 
 (when (member "Fragment Mono" (font-family-list))
   (set-face-attribute 'default nil :font "Fragment Mono" :height jah/font-height)

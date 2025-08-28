@@ -39,6 +39,7 @@ org-roam.db
 # using org-roam-dblocks in /nursery/ 
 # via https://github.com/chrisbarrett/nursery/tree/main
 /nursery/ 
+forge-database.sqlite
 
 # Temporary backup files
 %backup%~
