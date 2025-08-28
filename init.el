@@ -1,680 +1,566 @@
-;;; init.el
+;;; -*- lexical-binding: t -*-
 
-;; Author: Jason Heppler <jason@jasonheppler.org>
-;;
-;; Init file originally based off the Emacs Writing
-;; Studio init file: https://lucidmanager.org/tags/emacs
-
-;; Emacs 29 available?
-
-(when (< emacs-major-version 29)
-  (error "Requires version 29 or later"))
-
-;; Custom settings in a separate file and load the custom settings
-
-(setq-default custom-file (expand-file-name
-			     "custom.el"
-			     user-emacs-directory))
-
-(load custom-file :no-error-if-file-is-missing)
-
-;; Nano theme configuration
-(use-package nano-theme
+(use-package gcmh
   :config
-  ;; Set fonts before loading nano-theme
-  (set-face-attribute 'default nil :font "Berkeley Mono" :height 130)
-  (set-face-attribute 'fixed-pitch nil :font "Berkeley Mono")
-  (set-face-attribute 'variable-pitch nil :font "Berkeley Mono")
-  ;; Enable nano-theme features
-  (nano-light))
+  (setq gcmh-idle-delay 5
+        gcmh-high-cons-threshold (* 20 1024 1024))
+  (gcmh-mode 1))
 
+(setq file-name-handler-alist-original file-name-handler-alist)
+(setq file-name-handler-alist nil)
 
-;; Bind key for customising variables
+(setq native-comp-async-report-warnings-errors 'silent) ;; native-comp warning
+(setq byte-compile-warnings '(not free-vars unresolved noruntime lexical make-local))
 
-(keymap-global-set "C-c w v" 'customize-variable)
+(eval-when-compile
+  (dolist (sym '(cl-flet lisp-complete-symbol))
+    (setplist sym (use-package-plist-delete
+                   (symbol-plist sym) 'byte-obsolete-info))))
 
-;; Set package archives
+(setq which-func-update-delay 1.0)
 
-(use-package package
+(setq process-adaptive-read-buffering nil)
+(setq read-process-output-max (* 4 1024 1024))
+
+(setq gnutls-algorithm-priority "NORMAL:-VERS-TLS1.3")
+
+(setq native-comp-eln-load-path '("~/.config/emacs/eln-cache/"))
+
+;; House keeping 
+(setq user-emacs-directory "~/.config/emacs/")
+(setq default-directory "~/")
+
+(set-language-environment    "UTF-8")
+(setq locale-coding-system   'utf-8)
+(prefer-coding-system        'utf-8)
+(set-default-coding-systems  'utf-8)
+(set-terminal-coding-system  'utf-8)
+(set-keyboard-coding-system  'utf-8)
+(set-selection-coding-system 'utf-8)
+
+(setq large-file-warning-threshold (* 50 1024 1024))
+
+;; Package manager 
+(require 'package)
+(require 'use-package)
+(require 'use-package-ensure)
+(setq use-package-always-ensure t)
+
+(setq package-archives
+      '(("GNU ELPA"     . "https://elpa.gnu.org/packages/")
+        ("MELPA"        . "https://melpa.org/packages/")
+        ("ORG"          . "https://orgmode.org/elpa/")
+        ("MELPA Stable" . "https://stable.melpa.org/packages/")
+        ("nongnu"       . "https://elpa.nongnu.org/nongnu/"))
+      package-archive-priorities
+      '(("GNU ELPA"     . 20)
+        ("MELPA"        . 15)
+        ("ORG"          . 10)
+        ("MELPA Stable" . 5)
+        ("nongnu"       . 0)))
+(package-initialize)
+
+;; Local files 
+(defvar local-lisp (concat user-emacs-directory "local-lisp/"))
+(add-to-list 'load-path  local-lisp)
+(let ((default-directory local-lisp))
+  (normal-top-level-add-subdirs-to-load-path))
+
+(setq org-agenda-files '())
+(setq register-alist '())
+(setq projectile-project-search-path '())
+
+(add-hook
+ 'after-init-hook
+ (lambda ()
+   (let ((init-file (concat user-emacs-directory "init.el"))
+         (private-file (concat user-emacs-directory "private.el"))
+         (custom-file (concat user-emacs-directory "custom.el")))
+     (when (file-exists-p private-file)
+       (load-file private-file))
+     (when (file-exists-p custom-file)
+       (load-file custom-file))
+     (server-start))))
+
+;; support for org dblocks
+(add-to-list 'load-path "~/.config/emacs/nursery/lisp")
+
+;; Terminal setup 
+(dirtrack-mode t)
+
+(use-package exec-path-from-shell
+  :if (memq window-system '(mac ns))
   :config
-  (add-to-list 'package-archives
-               '("melpa" . "https://melpa.org/packages/"))
-  (package-initialize))
+  (exec-path-from-shell-initialize))
 
-;; Package Management
+(when (eq system-type 'darwin)
+  (setq vterm-shell "/opt/homebrew/bin/fish"))
 
-(use-package use-package
-  :custom
-  (use-package-always-ensure nil)
-  (package-native-compile t)
-  (warning-minimum-level :emergency))
+(use-package dwim-shell-command
+  :defer t
+  :init (require 'dwim-shell-commands))
 
-;; Load EWS functions -- specific to Emacs writing studio
+;; Keymappings 
+(defvar custom-bindings-map (make-keymap)
+  "A keymap for custom keybindings.")
 
-(load-file (concat (file-name-as-directory user-emacs-directory)
-		   "ews.el"))
+(define-minor-mode custom-bindings-mode
+  "A mode that activates custom-bindings-map."
+  :init-value t
+  :global t
+  :keymap custom-bindings-map)
 
-;; Check for missing external software
+(custom-bindings-mode 1)
 
-(ews-missing-executables
- '(("gs" "mutool")
-   "pdftotext"
-   "soffice"
-   "zip"
-   "ddjvu"
-   "curl"
-   ("mpg321" "ogg123" "mplayer" "mpv" "vlc") 
-   ("grep" "ripgrep")
-   ("convert" "gm")
-   "dvipng"
-   "latex"
-   "aspell"
-   "git"))
+(setq mac-command-modifier       'meta
+      mac-right-command-modifier 'meta
+      mac-option-modifier        nil
+      mac-right-option-modifier  nil)
 
-;;; LOOK AND FEEL
+(global-unset-key (kbd "C-x C-z"))
+(global-unset-key (kbd "C-<wheel-up>"))
+(global-unset-key (kbd "C-<wheel-down>"))
 
-(tool-bar-mode -1)
-(menu-bar-mode -1)
-(scroll-bar-mode -1)
+;; Visuals 
+(dolist (mode
+         '(tool-bar-mode       ;; Remove toolbar
+           scroll-bar-mode     ;; Remove scollbars
+           menu-bar-mode       ;; Remove menu bar
+           blink-cursor-mode)) ;; Solid cursor, not blinking
+  (funcall mode 0))
 
-;; Short answers only please
+(setq inhibit-startup-message           t       ;; No startup message
+      inhibit-startup-echo-area-message t       ;; No startup message in echo area
+      inhibit-startup-screen            t       ;; No default startup screen
+      initial-buffer-choice             t       ;; *scratch* is default startup buffer
+      initial-major-mode                'fundamental-mode
+      ring-bell-function                'ignore ;; No bell
+      display-time-default-load-average nil     ;; Don't show me load time
+      scroll-margin                     0       ;; Space between top/bottom
+      use-dialog-box                    nil)    ;; Disable dialog
 
-(setq-default use-short-answers t)
+;; Frames and windows
+(add-to-list 'default-frame-alist     '(fullscreen . maximized))
+;; (add-hook 'window-setup-hook          'toggle-frame-fullscreen t)  ;; F11
 
-;; Scratch buffer settings
+(defun toggle-transparency ()
+  (interactive)
+  (let ((alpha (frame-parameter nil 'alpha)))
+    (set-frame-parameter
+     nil 'alpha
+     (if (eql (cond ((numberp alpha) alpha)
+                    ((numberp (cdr alpha)) (cdr alpha))
+                    ;; Also handle undocumented (<active> <inactive>) form.
+                    ((numberp (cadr alpha)) (cadr alpha)))
+              100)
+         '(90 . 55) '(100 . 100)))))
+(global-set-key (kbd "C-c h t") 'toggle-transparency)
 
-(setq initial-major-mode 'org-mode
-      initial-scratch-message "#+title: Time to Work\n#+subtitle: Scratch Buffer\nThe text in this buffer is not saved when exiting Emacs!\n\n"
-      inhibit-startup-screen t)
+(add-to-list 'default-frame-alist '(internal-border-width . 16))
 
-;; Spacious padding
+(set-fringe-mode 10)                          ;; Set fringe width to 10
 
-(use-package spacious-padding
-  :custom
-  (line-spacing 3)
-  (spacious-padding-mode 1))
+(setq-default fringes-outside-margins nil)
+(setq-default indicate-buffer-boundaries nil) ;; Otherwise shows a corner icon on the edge
+(setq-default indicate-empty-lines nil)       ;; Otherwise there are weird fringes on blank lines
 
-;; Mixed-pitch mode
+(set-face-attribute 'header-line t :inherit 'default)
+
+;; emacs plus macos 
+(when (eq system-type 'darwin)
+  ; no title bar
+  (add-to-list 'default-frame-alist '(undecorated-round . t))
+  ; don't use proxy icon
+  (setq ns-use-proxy-icon nil)
+  ; don't show buffer name in title bar
+  (setq frame-title-format ""))
+
+;; Programming 
+(setq-default cursor-type 'bar)
+
+(use-package beacon
+  :defer t
+  :init  (beacon-mode 1)
+  :bind (:map custom-bindings-map ("C-:" . beacon-blink))
+  :config
+  (setq beacon-blink-when-window-scrolls nil))
+
+(use-package rainbow-delimiters
+  :hook (prog-mode-hook . rainbow-delimiters-mode))
+
+(show-paren-mode t) ;; Highlight matching parentheses
+
+(add-hook 'prog-mode-hook 'display-line-numbers-mode)
+
+(require 'uniquify)
+(setq uniquify-buffer-name-style 'forward)
+
+(setq my-whitespace-style '(face tabs lines-tail)
+      whitespace-style my-whitespace-style
+      whitespace-line-column 120
+      fill-column 120
+      whitespace-display-mappings
+      '((space-mark 32 [183] [46])
+        (newline-mark 10 [36 10])
+        (tab-mark 9 [9655 9] [92 9])))
+
+;; in e.g. clojure-mode-hook
+;; (whitespace-mode 1)
+;; or globally
+;; (global-whitespace-mode 1)
+(add-hook 'prog-mode 'whitespace-mode)
+
+;; Fonts 
+(defvar jah/font-height 115)
+
+(when (eq system-type 'darwin)
+  (setq jah/font-height 120))
+
+(when (member "Fragment Mono" (font-family-list))
+  (set-face-attribute 'default nil :font "Fragment Mono" :height jah/font-height)
+  (set-face-attribute 'fixed-pitch nil :family "Fragment Mono"))
+
+(when (member "Roboto Mono" (font-family-list))
+  (set-face-attribute 'variable-pitch nil :family "Roboto Mono"))
 
 (use-package mixed-pitch
-  :hook
-  (org-mode . mixed-pitch-mode))
-
-;; Window management
-;; Split windows sensibly
-
-(setq split-width-threshold 120
-      split-height-threshold nil)
-
-;; Keep window sizes balanced
-
-(use-package balanced-windows
-  :config
-  (balanced-windows-mode))
-
-;; MINIBUFFER COMPLETION
-
-;; Enable vertico
-
-(use-package vertico
-  :init
-  (vertico-mode)
-  :custom
-  (vertico-sort-function 'vertico-sort-history-alpha))
-
-;; Persist history over Emacs restarts.
-
-(use-package savehist
-  :init
-  (savehist-mode))
-
-;; Search for partial matches in any order
-
-(use-package orderless
-  :custom
-  (completion-styles '(orderless basic))
-  (completion-category-defaults nil)
-  (completion-category-overrides
-   '((file (styles partial-completion)))))
-
-;; Enable richer annotations using the Marginalia package
-
-(use-package marginalia
-  :init
-  (marginalia-mode))
-
-;; Helm -- mainly for buffer nav
-;;(use-package 'helm)
-
-;; Improve keyboard shortcut discoverability
-
-(use-package which-key
-  :config
-  (which-key-mode)
-  :custom
-  (which-key-max-description-length 40)
-  (which-key-lighter nil)
-  (which-key-sort-order 'which-key-description-order))
-
-;; Contextual menu with right mouse button
-
-(when (display-graphic-p)
-  (context-menu-mode))
-
-;; Improved help buffers
-
-(use-package helpful
-  :bind
-  (("C-h f" . helpful-function)
-   ("C-h x" . helpful-command)
-   ("C-h k" . helpful-key)
-   ("C-h v" . helpful-variable)))
-
-;;; Text mode settings
-
-(use-package text-mode
-  :ensure
-  nil
-  :hook
-  (text-mode . visual-line-mode)
-  :init
-  (delete-selection-mode t)
-  :custom
-  (sentence-end-double-space nil)
-  (scroll-error-top-bottom t)
-  (save-interprogram-paste-before-kill t))
-
-;; Check spelling with flyspell and aspell
-
-(use-package flyspell
-  :custom
-  (ispell-program-name "aspell")
-  (ispell-dictionary ews-aspell-dictionaries)
-  (flyspell-mark-duplications-flag nil) ;; Writegood mode does this
-  (org-fold-core-style 'overlays) ;; Fix Org mode bug
-  :config
-  (ispell-set-spellchecker-params)
-  :hook
-  (text-mode . flyspell-mode)
-  :bind
-  (("C-c w s s" . ispell)
-   ("C-;"       . flyspell-auto-correct-previous-word)))
-
-;;; Org
-
-(use-package org
-  :custom
-  (org-startup-indented t)
-  (org-hide-emphasis-markers t)
-  (org-startup-with-inline-images t)
-  (org-image-actual-width '(450))
-  (org-fold-catch-invisible-edits 'error)
-  (org-pretty-entities t)
-  (org-use-sub-superscripts "{}")
-  (org-id-link-to-org-use-id t)
-  (org-fold-catch-invisible-edits 'show))
-
-(setq org-directory (concat (getenv "HOME") "/Documents/org"))
-(setq org-default-notes-file (concat org-directory "/notes.org"))
-(setq org-log-done 'time)
-
-;; Advanced queries with org-ql 
-(use-package org-ql
-  :after org)
-
-;; org-transclude
-(use-package org-transclude
-  :after org)
-(define-key global-map (kbd "C-c t a") #'org-transclusion-add)
-(define-key global-map (kbd "C-c t m") #'org-transclusion-mode)
-
-;; Show hidden emphasis markers
-(use-package org-appear
-  :hook
-  (org-mode . org-appear-mode))
-
-;; LaTeX previews
-(use-package org-fragtog
-  :after org
-  :hook
-  (org-mode . org-fragtog-mode)
-  :custom
-  (org-startup-with-latex-preview nil)
-  (org-format-latex-options
-   (plist-put org-format-latex-options :scale 2)
-   (plist-put org-format-latex-options :foreground 'auto)
-   (plist-put org-format-latex-options :background 'auto)))
-
-;; Org modern: Most features are disabled for beginning users
-
-(use-package org-modern
-  :hook
-  (org-mode . org-modern-mode))
-;;  :custom
-;;  (org-modern-table nil)
-;;  (org-modern-keyword nil)
-;;  (org-modern-timestamp nil)
-;;  (org-modern-priority nil)
-;;  (org-modern-checkbox nil)
-;;  (org-modern-tag nil)
-;;  (org-modern-block-name nil)
-;;  (org-modern-keyword nil)
-;;  (org-modern-footnote nil)
-;;  (org-modern-internal-target nil)
-;;  (org-modern-radio-target nil)
-;;  (org-modern-statistics nil)
-;;  (org-modern-progress nil))
-
-;; INSPIRATION
-
-;; Doc-View
-
-(use-package doc-view
-  :custom
-  (doc-view-resolution 300)
-  (large-file-warning-threshold (* 50 (expt 2 20))))
-
-;; Read ePub files
-
-(use-package nov
-  :init
-  (add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode)))
-
-;; Managing Bibliographies
-
-(use-package bibtex
-  :custom
-  (bibtex-user-optional-fields
-   '(("keywords" "Keywords to describe the entry" "")
-     ("file"     "Relative or absolute path to attachments" "" )))
-  (bibtex-align-at-equal-sign t)
-  :config
-  (ews-bibtex-register)
-  :bind
-  (("C-c w b r" . ews-bibtex-register)))
-
-;; Biblio package for adding BibTeX records
-
-(use-package biblio
-  :bind
-  (("C-c w b b" . ews-bibtex-biblio-lookup)))
-
-;; Citar to access bibliographies
-
-;; (use-package citar
-;;   :defer t
-;;   :custom
-;;   (citar-bibliography ews-bibtex-files)
-;;   :bind
-;;   (("C-c w b o" . citar-open)))
-
-;; Read RSS feeds with Elfeed
-
-(use-package elfeed
-  :custom
-  (elfeed-db-directory
-   (expand-file-name "elfeed" user-emacs-directory))
-  (elfeed-show-entry-switch 'display-buffer)
-  :bind
-  ("C-c w e" . elfeed))
-
-;; Configure Elfeed with org mode
-
-(use-package elfeed-org
-  :config
-  (elfeed-org)
-  :custom
-  (rmh-elfeed-org-files
-   (list (concat (file-name-as-directory (getenv "HOME"))
-		 "elfeed.org"))))
-
-;; Easy insertion of weblinks
-
-(use-package org-web-tools
-  :bind
-  (("C-c w w" . org-web-tools-insert-link-for-url)))
-
-;; Emacs Multimedia System
-
-(use-package emms
-  :config
-  (require 'emms-setup)
-  (require 'emms-mpris)
-  (emms-all)
-  (emms-default-players)
-  (emms-mpris-enable)
-  :custom
-  (emms-browser-covers #'emms-browser-cache-thumbnail-async)
-  :bind
-  (("C-c w m b" . emms-browser)
-   ("C-c w m e" . emms)
-   ("C-c w m p" . emms-play-playlist )
-   ("<XF86AudioPrev>" . emms-previous)
-   ("<XF86AudioNext>" . emms-next)
-   ("<XF86AudioPlay>" . emms-pause)))
-
-;; Open files with external applications
-
-(use-package openwith
-  :config
-  (openwith-mode t)
-  :custom
-  (openwith-associations nil))
-
-;; Fleeting notes
-
-(use-package org
-  :bind
-  (("C-c c" . org-capture)
-   ("C-c l" . org-store-link))
-  :custom
-  (org-goto-interface 'outline-path-completion)
-  (org-capture-templates
-   '(("f" "Fleeting note"
-      item
-      (file+headline org-default-notes-file "Notes")
-      "- %?\n  - Captured: %U")
-     ("F" "Fleeting note with context"
-      item
-      (file+headline org-default-notes-file "Notes")
-      "- %?\n  - Context: %a\n  - Captured: %U")
-     ("p" "Permanent note (org-roam)" plain
-      (function org-roam-node-find)
-      "%?"
-      :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org" "#+title: ${title}\n#+date: %U\n#+filetags: \n\n")
-      :empty-lines 1
-      :unnarrowed t)
-     ("t" "New task" entry
-      (file+headline org-default-notes-file "Tasks")
-      "* TODO %i%?\n  - Added: %U")
-     ("j" "Journal entry" entry
-      (file+olp+datetree org-default-notes-file "Journal")
-      "* %?\n  - Captured: %U")
-     ("r" "Reading note" item
-      (file+headline org-default-notes-file "Reading")
-      "- %?\n  - Source: %^{Source}\n  - Captured: %U"))))
-
-;; Org-Roam 
-(use-package org-roam
   :defer t
+  :hook ((org-mode   . mixed-pitch-mode)
+         (LaTeX-mode . mixed-pitch-mode)))
+
+(defvar ligature-def '("|||>" "<|||" "<==>" "<!--" "####" "~~>" "***" "||=" "||>"
+                       ":::" "::=" "=:=" "===" "==>" "=!=" "=>>" "=<<" "=/=" "!=="
+                       "!!." ">=>" ">>=" ">>>" ">>-" ">->" "->>" "-->" "---" "-<<"
+                       "<~~" "<~>" "<*>" "<||" "<|>" "<$>" "<==" "<=>" "<=<" "<->"
+                       "<--" "<-<" "<<=" "<<-" "<<<" "<+>" "</>" "###" "#_(" "..<"
+                       "..." "+++" "/==" "///" "_|_" "www" "&&" "^=" "~~" "~@" "~="
+                       "~>" "~-" "**" "*>" "*/" "||" "|}" "|]" "|=" "|>" "|-" "{|"
+                       "[|" "]#" "::" ":=" ":>" ":<" "$>" "==" "=>" "!=" "!!" ">:"
+                       ">=" ">>" ">-" "-~" "-|" "->" "--" "-<" "<~" "<*" "<|" "<:"
+                       "<$" "<=" "<>" "<-" "<<" "<+" "</" "#{" "#[" "#:" "#=" "#!"
+                       "##" "#(" "#?" "#_" "%%" ".=" ".-" ".." ".?" "+>" "++" "?:"
+                       "?=" "?." "??" ";;" "/*" "/=" "/>" "//" "__" "~~" "(*" "*)"
+                       "\\\\" "://"))
+
+(use-package ligature
+  :config
+  (ligature-set-ligatures 'prog-mode ligature-def)
+  (global-ligature-mode t))
+
+(setq text-scale-mode-step 1.1)
+
+(use-package default-text-scale
+  :defer t
+  :bind (:map custom-bindings-map
+              ("C-x C-+" . default-text-scale-increase)
+              ("C-x C--" . default-text-scale-decrease)
+              ("C-x C-0" . default-text-scale-reset)))
+
+;; Icons 
+(use-package nerd-icons)
+
+(use-package emojify
+  :config
+  (when (member "Apple Color Emoji" (font-family-list))
+    (set-fontset-font
+      t 'symbol (font-spec :family "Apple Color Emoji") nil 'prepend)))
+
+;; Themes 
+(use-package doom-themes
+  :config
+  (setq doom-themes-enable-bold t     ; if nil, bold is universally disabled
+        doom-themes-enable-italic t)) ; if nil, italics is universally disabled
+
+(use-package south-theme
+  :vc (:url "https://github.com/SophieBosio/south"
+       :rev :newest
+       :branch "main"))
+
+(setq custom-safe-themes t)
+
+(defvar jah/default-dark-theme  'doom-nord)
+(defvar jah/default-light-theme 'south)
+
+(defvar jah/default-dark-accent-colour  "SkyBlue4")
+(defvar jah/default-light-accent-colour "#D9EDFC")
+
+(load-theme jah/default-dark-theme t)
+
+(use-package autothemer
+  :defer t)
+
+(use-package auto-dark
+  :ensure t
+  :hook ((auto-dark-dark-mode
+          .
+          (lambda ()
+            (interactive)
+            (progn
+              (custom-set-faces
+               `(eval-sexp-fu-flash
+                 ((t (:background
+                      ,jah/default-dark-accent-colour)))))
+              `(load-theme ,jah/default-dark-theme t))))
+         (auto-dark-light-mode
+          .
+          (lambda ()
+            (interactive)
+            (progn
+              (custom-set-faces
+               `(eval-sexp-fu-flash
+                 ((t (:background
+                      ,jah/default-light-accent-colour)))))
+              `(load-theme ,jah/default-light-theme t)))))
   :custom
-  (org-roam-directory "~/Documents/notes/")
-  (org-roam-completion-everywhere t)
-  (org-roam-capture-templates
-   '(("d" "default" plain
-      "%?"
-      :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org" "#+title: ${title}\n#+date: %U\n#+filetags: \n\n")
-      :unnarrowed t)
+  (auto-dark-themes                   `((,jah/default-dark-theme) (,jah/default-light-theme)))
+  (auto-dark-polling-interval-seconds 5)
+  (auto-dark-allow-osascript          t)
+  :init (auto-dark-mode t))
 
-     ("a" "archival-item" plain
-      "%?"
-      :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
-                         "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:source:\n:PROPERTIES:\n:CREATOR: \n:PUBLISHER: \n:DATE: \n:ARCHIVE_NAME: \n:COLLECTION: \n:SERIES: \n:BOX: \n:FOLDER: \n:CALL_NUMBER: \n:ITEM_NUMBER: \n:PEOPLE: \n:ORGANIZATIONS: \n:LOCATIONS: \n:TOPICS: \n:SOURCE_URL: \n:END:\n\n* Abstract / Overview\n\n\n* Images\n\n\n* Transcription\n\n\n* Notes\n\n")
-      :unnarrowed t)
+(when (eq system-type 'darwin)
+  (define-key custom-bindings-map (kbd "M-T") 'dwim-shell-commands-macos-toggle-dark-mode))
 
-    ("p" "person" plain
-        "%?"
-        :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
-                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:person:biography:\n:PROPERTIES:\n:NAME: \n:BIRTH_DATE: \n:DEATH_DATE: \n:OCCUPATIONS: \n:STATES_LIVED: \n:FAITH: \n:THEMES: \n:END:\n\n* Biography\n\n\n* Connections\n\n\n* Key Events\n\n\n* Relevant Documents\n\n\n* Notes\n\n")
-        :unnarrowed t)
+(defun disable-custom-themes (theme &optional no-confirm no-enable)
+  (mapc 'disable-theme custom-enabled-themes))
 
-    ("e" "event" plain
-        "%?"
-        :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
-                          "#+TITLE: ${title}\n#+FILETAGS: :event:\n:PROPERTIES:\n:START_DATE: \n:END_DATE: \n:LOCATION: \n:PEOPLE_INVOLVED: \n:ORGANIZATIONS_INVOLVED: \n:TOPICS: \n:END:\n\n* Description\n\n\n* Context\n\n\n* Significance\n\n\n* Related Notes\n\n")
-        :unnarrowed t)
+(advice-add 'load-theme :before #'disable-custom-themes)
 
-    ("s" "analysis-synthesis" plain
-        "%?"
-        :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
-                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:bridge:\n:PROPERTIES:\n:DATE: %U\n:END:\n\n* Topic Summary\n\n\n* /Argument\n\n\n* Evidence\n\n\n* Connections\n\n\n* Remaining Questions/Next Steps\n\n")
-        :unnarrowed t))
-   )
-  :config
-  (org-roam-db-autosync-mode)
-  ;; :bind
-  (("C-c w d n" . org-roam-node-find)          ; equivalent to denote
-   ("C-c w d i" . org-roam-node-insert)        ; equivalent to denote-link-or-create
-   ("C-c w d f" . org-roam-node-find)          ; equivalent to consult-notes
-   ("C-c w d l" . org-roam-buffer-toggle)      ; show links/backlinks
-   ("C-c w d b" . org-roam-buffer-toggle)      ; equivalent to denote-find-backlink
-   ("C-c w d r" . org-roam-node-rename)        ; equivalent to denote-rename-file
-   ("C-c w d k" . org-roam-tag-add)            ; equivalent to denote-rename-file-keywords
-   ("C-c w d d" . org-roam-dailies-goto-today))
-  )
-(setq org-adapt-indentation t)
+;; Mode line
+(column-number-mode t) ;; Show current column number in mode line
 
-;; Org-roam UI enhancements
-(use-package org-roam-ui
-  :after org-roam
-  :config
-  (setq org-roam-ui-sync-theme t
-        org-roam-ui-follow t
-        org-roam-ui-update-on-save t
-        org-roam-ui-open-on-start t))
+(defvar lsp-modeline--code-actions-string nil)
 
-;; Org-roam queries
-(use-package org-roam-ql
-  :after (org-roam)
-  :bind ((:map org-roam-mode-map
-               ;; Have org-roam-ql's transient available in org-roam-mode buffers
-               ("v" . org-roam-ql-buffer-dispatch)
-               :map minibuffer-mode-map
-               ;; Be able to add titles in queries while in minibuffer.
-               ;; This is similar to `org-roam-node-insert', but adds
-               ;; only title as a string.
-               ("C-c n i" . org-roam-ql-insert-node-title))))
+(setq-default mode-line-format
+  '("%e"
+	(:propertize " " display (raise +0.4)) ;; Top padding
+	(:propertize " " display (raise -0.4)) ;; Bottom padding
 
-;; Consult integration for org-roam
-(use-package consult-org-roam
-  :after (consult org-roam)
-  :custom
-  (consult-org-roam-grep-func #'consult-ripgrep)
-  :bind
-  (("C-c w d g" . consult-org-roam-search)
-   ("C-c w g" . consult-grep)
-   ("C-c w h" . consult-org-heading))
-  :config
-  (consult-org-roam-mode 1))
+	(:propertize "λ " face font-lock-comment-face)
+	mode-line-frame-identification
+	mode-line-buffer-identification
 
-;; Org-roam dailies for date-based notes
-(use-package org-roam-dailies
-  :after org-roam
-  :bind
-  (("C-c w d t" . org-roam-dailies-goto-today)
-   ("C-c w d y" . org-roam-dailies-goto-yesterday)
-   ("C-c w d T" . org-roam-dailies-goto-tomorrow)
-   ("C-c w d c" . org-roam-dailies-capture-today)))
+	;; Version control info
+	(:eval (when-let* ((vc vc-mode))
+			 ;; Use a pretty branch symbol in front of the branch name
+			 (list (propertize "   " 'face 'font-lock-comment-face)
+                   ;; Truncate branch name to 50 characters
+				   (propertize (truncate-string-to-width
+                                (substring vc 5) 50)
+							   'face 'font-lock-comment-face))))
 
-;; Citar to access bibliographies
-(use-package citar
-   :custom
-   (citar-bibliography '("~/Documents/Academia/library.bib"))
-   (citar-notes-paths '("~/Documents/notes/"))
-   (citar-open-always-create-notes t)
-   (org-cite-insert-processor 'citar)
-   (org-cite-follow-processor 'citar)
-   (org-cite-activate-processor 'citar)
-   :bind
-   (("C-c w b c" . citar-create-note)
-    ("C-c w b n" . citar-open-notes)
-    ("C-c w b x" . citar-insert-citation)
-    ("C-c w b d" . citar-dwim)
-    ("C-c w b e" . citar-open)
-    :map org-mode-map
-    ("C-c w b k" . org-cite-insert)))
+	;; Add space to align to the right
+	(:eval (propertize
+			 " " 'display
+			 `((space :align-to
+					  (-  (+ right right-fringe right-margin)
+						 ,(+ 3
+                             (string-width (or lsp-modeline--code-actions-string ""))
+                             (string-width "%4l:3%c")))))))
 
-;; Optional: org-roam export for publishing
-(use-package org-roam-export
-  :after org-roam)
+    ;; LSP code actions
+    (:eval (or lsp-modeline--code-actions-string ""))
+	
+	;; Line and column numbers
+	(:propertize "%4l:%c" face mode-line-buffer-id)))
 
-;; Custom functions to replicate some Denote-specific behavior
-(defun ews-org-roam-link-description-title-case (node)
-  "Convert org-roam NODE title to title case for links."
-  (let ((title (org-roam-node-title node)))
-    (s-titleize title)))
+(use-package hide-mode-line
+  :defer t
+  :bind (:map custom-bindings-map ("C-c h m" . hide-mode-line-mode)))
 
-;; Set custom link description function
-(setq org-roam-node-display-template
-      (concat "${title:60} "
-              (propertize "${tags:20}" 'face 'org-tag)))
-
-;; Custom face for org-roam links (equivalent to denote-faces-link)
-(custom-set-faces
- '(org-roam-link ((t (:slant italic)))))
-
-;; Additional bindings for extracted functionality
-(bind-key "C-c w d s" #'my/org-roam-extract-subtree)
-(bind-key "C-c w d h" #'org-roam-extract-subtree) ; heading extraction
-
-;; Custom functions for fleeting/permanent notes integration
-(defun ews-fleeting-to-permanent ()
-  "Convert current fleeting note item to a permanent org-roam note."
-  (interactive)
-  (let ((content (thing-at-point 'line t)))
-    (when content
-      (kill-whole-line)
-      (org-roam-capture- :node (org-roam-node-create :title (read-string "Title: "))
-                        :templates '(("d" "default" plain "%?"
-                                     :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org"
-                                                       "#+title: ${title}\n#+date: %U\n#+filetags: fleeting\n\n")
-                                     :unnarrowed t))
-                        :info (list :body content)))))
-
-(defun ews-review-fleeting-notes ()
-  "Open fleeting notes file for review and processing."
-  (interactive)
-  (find-file org-default-notes-file)
-  (goto-char (point-min))
-  (when (search-forward "* Notes" nil t)
-    (org-show-subtree)))
-
-(bind-key "C-c w n f" #'ews-fleeting-to-permanent)
-(bind-key "C-c w n r" #'ews-review-fleeting-notes)
-
-;; Denote
-
-;; (use-package denote
-;;   :defer t
-;;   :custom
-;;   (denote-sort-keywords t)
-;;   (denote-link-description-function #'ews-denote-link-description-title-case)
-;;   :hook
-;;   (dired-mode . denote-dired-mode)
-;;   :custom-face
-;;   (denote-faces-link ((t (:slant italic))))
-;;   :bind
-;;   (("C-c w d b" . denote-find-backlink)
-;;    ("C-c w d d" . denote-date)
-;;    ("C-c w d l" . denote-find-link)
-;;    ("C-c w d i" . denote-link-or-create)
-;;    ("C-c w d k" . denote-rename-file-keywords)
-;;    ("C-c w d n" . denote)
-;;    ("C-c w d r" . denote-rename-file)
-;;    ("C-c w d R" . denote-rename-file-using-front-matter)))
-;;
-;; (use-package denote-org
-;;   :bind
-;;   (("C-c w d h" . denote-org-link-to-heading)
-;;    ("C-c w d s" . denote-org-extract-org-subtree)))
-
-
-;; Consult convenience functions
-
-(use-package consult
-  :bind
-  (("C-c w h" . consult-org-heading)
-   ("C-c w g" . consult-grep))
-  :config
-  (add-to-list 'consult-preview-allowed-hooks 'visual-line-mode))
-
-;; Consult-Notes for easy access to notes
-(use-package consult-notes
-  :bind (("C-c w d f" . consult-notes)
-         ("C-c w d g" . consult-notes-search-in-all-notes))
-  :config
-  (consult-notes-org-roam-mode 1))
-;; (use-package consult-notes
-;;   :commands (consult-notes
-;;              consult-notes-search-in-all-notes
-;;              consult-notes-org-roam-find-node
-;;              consult-notes-org-roam-find-node-relation)
-;;   ;; :custom
-;;   ;; (consult-notes-denote-display-keywords-indicator "_")
-;;   :bind
-;;   (("C-c w d f" . consult-notes)
-;;    ("C-c w d g" . consult-notes-search-in-all-notes))
-;;   ;;:init
-;;   ;;(consult-notes-denote-mode)
-;;   )
-
-
-(use-package org-roam-bibtex
-  :after (org-roam citar)
-  :config (org-roam-bibtex-mode 1))
-
-;; Citar-Denote to manage literature notes
-
-;; (use-package citar-denote
-;;   :custom
-;;   (citar-open-always-create-notes t)
-;;   :init
-;;   (citar-denote-mode)
-;;   :bind
-;;   (("C-c w b c" . citar-create-note)
-;;    ("C-c w b n" . citar-denote-open-note)
-;;    ("C-c w b x" . citar-denote-nocite)
-;;    :map org-mode-map
-;;    ("C-c w b k" . citar-denote-add-citekey)
-;;    ("C-c w b K" . citar-denote-remove-citekey)
-;;    ("C-c w b d" . citar-denote-dwim)
-;;    ("C-c w b e" . citar-denote-open-reference-entry)))
-
-;; Explore and manage your Denote collection
-
-;; (use-package denote-explore
-;;   :bind
-;;   (;; Statistics
-;;    ("C-c w x c" . denote-explore-count-notes)
-;;    ("C-c w x C" . denote-explore-count-keywords)
-;;    ("C-c w x b" . denote-explore-barchart-keywords)
-;;    ("C-c w x e" . denote-explore-barchart-filetypes)
-;;    ;; Random walks
-;;    ("C-c w x r" . denote-explore-random-note)
-;;    ("C-c w x l" . denote-explore-random-link)
-;;    ("C-c w x k" . denote-explore-random-keyword)
-;;    ("C-c w x x" . denote-explore-random-regex)
-;;    ;; Denote Janitor
-;;    ("C-c w x d" . denote-explore-identify-duplicate-notes)
-;;    ("C-c w x z" . denote-explore-zero-keywords)
-;;    ("C-c w x s" . denote-explore-single-keywords)
-;;    ("C-c w x o" . denote-explore-sort-keywords)
-;;    ("C-c w x w" . denote-explore-rename-keyword)
-;;    ;; Visualise denote
-;;    ("C-c w x n" . denote-explore-network)
-;;    ("C-c w x v" . denote-explore-network-regenerate)
-;;    ("C-c w x D" . denote-explore-barchart-degree)))
-
-;; Set some Org mode shortcuts
-
-(use-package org
-  :bind
-  (:map org-mode-map
-        ("C-c w n" . ews-org-insert-notes-drawer)
-        ("C-c w p" . ews-org-insert-screenshot)
-        ("C-c w c" . ews-org-count-words)))
-
-;; Distraction-free writing
-
+;; Text display 
 (use-package olivetti
-  :demand t
-  :bind
-  (("C-c w o" . ews-olivetti)))
+  :defer t
+  :config
+  (setq olivetti-style t))
 
-;; Focus mode - dims everything except current paragraph
+(use-package adaptive-wrap
+  :defer t
+  :hook (visual-line-mode . adaptive-wrap-prefix-mode))
+
+(use-package writeroom-mode
+  :defer t)
+
 (use-package focus
-  :bind
-  (("C-c w f" . focus-mode)))
+  :defer t)
+
+;; General editing 
+(delete-selection-mode   t) ;; Replace selected text when yanking
+(global-so-long-mode     t) ;; Mitigate performance for long lines
+(global-visual-line-mode t) ;; Break lines instead of truncating them
+(global-auto-revert-mode t) ;; Revert buffers automatically when they change
+(recentf-mode            t) ;; Remember recently opened files
+(savehist-mode           t) ;; Remember minibuffer prompt history
+(save-place-mode         t) ;; Remember last cursor location in file
+
+(setq auto-revert-interval         1         ;; Refresh buffers fast
+      auto-revert-verbose          nil       ;; Don't notify me about reverts
+      echo-keystrokes              0.1       ;; Show keystrokes fast
+      frame-inhibit-implied-resize 1         ;; Don't resize frame implicitly
+      sentence-end-double-space    nil       ;; No double spaces
+      recentf-max-saved-items      1000      ;; Show more recent files
+      use-short-answers            t         ;; 'y'/'n' instead of 'yes'/'no' etc.
+      save-interprogram-paste-before-kill t  ;; Save copies between programs
+      history-length               25        ;; Only save the last 25 minibuffer prompts
+      global-auto-revert-non-file-buffers t) ;; Revert Dired and other buffers
+
+(setq-default tab-width 4)  ;; Smaller tabs
+
+;; Scrolling
+(setq scroll-conservatively            101
+      mouse-wheel-follow-mouse         't
+      mouse-wheel-progressive-speed    nil
+      ;; Scroll 1 line at a time, instead of default 5
+      ;; Hold shift to scroll faster and meta to scroll very fast
+      mouse-wheel-scroll-amount        '(1 ((shift) . 3) ((meta) . 6)))
+
+;; (Native) smooooooth scrolling
+(pixel-scroll-mode)
+(pixel-scroll-precision-mode)
+
+(setq mac-redisplay-dont-reset-vscroll t
+      mac-mouse-wheel-smooth-scroll    nil)
+
+;; Tabs
+(defun infer-indentation-style ()
+  "Default to no tabs, but use tabs if already in project"
+  (let ((space-count (how-many "^  " (point-min) (point-max)))
+        (tab-count   (how-many "^\t" (point-min) (point-max))))
+    (if (> space-count tab-count) (setq-default indent-tabs-mode nil))
+    (if (> tab-count space-count) (setq-default indent-tabs-mode t))))
+
+(setq-default indent-tabs-mode nil)
+(infer-indentation-style)
+
+(define-key custom-bindings-map (kbd "<backtab>") 'indent-rigidly-left)
+
+(setq backward-delete-char-untabify-method 'hungry)
+
+(defun jah/delete-dont-kill (arg)
+  "Delete characters backward until encountering the beginning of a word.
+   With argument ARG, do this that many times. Don't add to kill ring."
+  (interactive "p")
+  (delete-region (point) (progn (backward-word arg) (point))))
+
+(defun jah/backward-delete ()
+  "Delete a word, a character, or whitespace."
+  (interactive)
+  (cond
+   ;; If you see a word, delete all of it
+   ((looking-back (rx (char word)) 1)
+    (jah/delete-dont-kill 1))
+   ;; If you see a single whitespace and a word, delete both together
+   ((looking-back (rx (seq (char word) (= 1 blank))) 1)
+	(jah/delete-dont-kill 1))
+   ;; If you see several whitespaces, delete them until the next word
+   ((looking-back (rx (char blank)) 1)
+    (delete-horizontal-space t))
+   ;; If you see a single non-word character, delete that
+   (t
+    (backward-delete-char-untabify 1))))
+
+(define-key custom-bindings-map [C-backspace] 'jah/backward-delete)
+
+;; Browse killring
+(use-package browse-kill-ring
+  :defer t)
+
+(defvar emacs-autosave-directory
+  (concat user-emacs-directory "autosaves/")
+  "This variable dictates where to put auto saves. It is set to a
+  directory called autosaves located wherever your .emacs.d/ is
+  located.")
+
+;; Sets all files to be backed up and auto saved in a single directory.
+(setq backup-directory-alist
+      `((".*" . ,emacs-autosave-directory))
+      auto-save-file-name-transforms
+      `((".*" ,emacs-autosave-directory t)))
+
+(use-package auto-save-buffers-enhanced
+  :ensure t
+  :config
+  (auto-save-buffers-enhanced t)
+  (setq auto-save-buffers-enhanced-exclude-regexps
+        '("init.el"
+          "\\(\\.js\\|\\.ts\\|\\.jsx\\|\\.tsx\\|\\.html\\)$")))
+
+;; Move where I mean 
+(use-package mwim
+  :ensure t
+  :bind (:map custom-bindings-map
+              ("C-a" . mwim-beginning-of-code-or-line)
+              ("C-e" . mwim-end-of-code-or-line)))
+
+;; Text editing functions 
+(use-package expand-region
+  :defer t
+  :bind (:map custom-bindings-map
+              ("M-q" . er/expand-region)
+              ("M-'" . er/contract-region)))
+
+;;; Stefan Monnier <foo at acm.org>. It is the opposite of fill-paragraph
+(defun unfill-paragraph (&optional region)
+  "Takes a multi-line paragraph and makes it into a single line of text."
+  (interactive (progn (barf-if-buffer-read-only) '(t)))
+  (let ((fill-column (point-max))
+		;; This would override `fill-column' if it's an integer.
+		(emacs-lisp-docstring-fill-column t))
+	(fill-paragraph nil region)))
+;; Handy key definition
+(define-key custom-bindings-map (kbd "C-c n q") 'unfill-paragraph)
+
+(use-package multiple-cursors
+  :defer t
+  :functions
+  mc/remove-fake-cursors
+  mc/save-excursion
+  mc/create-fake-cursor-at-point
+  mc/maybe-multiple-cursors-mode
+  :bind (:map custom-bindings-map
+              ("M-n" . mc/mark-next-like-this)
+              ("M-p" . mc/mark-previous-like-this))
+  :config
+  (setq mc/always-run-for-all t))
+
+(use-package symbol-overlay
+  :defer t
+  :functions
+  symbol-overlay-put
+  symbol-overlay-mode
+  :hook (prog-mode . symbol-overlay-mode)
+  :bind (:map custom-bindings-map
+              ("C-;" . symbol-overlay-put)
+              ("M-N" . symbol-overlay-jump-next)
+              ("M-P" . symbol-overlay-jump-previous)))
+
+(defun ar/mc-mark-all-symbol-overlays ()
+  "Mark all symbol overlays using multiple cursors."
+  (interactive)
+  (mc/remove-fake-cursors)
+  (when-let* ((overlays (symbol-overlay-get-list 0))
+              (point (point))
+              (point-overlay (seq-find
+                              (lambda (overlay)
+                                (and (<= (overlay-start overlay) point)
+                                     (<= point (overlay-end overlay))))
+                              overlays))
+              (offset (- point (overlay-start point-overlay))))
+    (setq deactivate-mark t)
+    (mapc (lambda (overlay)
+            (unless (eq overlay point-overlay)
+              (mc/save-excursion
+               (goto-char (+ (overlay-start overlay) offset))
+               (mc/create-fake-cursor-at-point))))
+          overlays)
+    (mc/maybe-multiple-cursors-mode)))
+
+(define-key custom-bindings-map (kbd "C-M-;") 'ar/mc-mark-all-symbol-overlays)
+
+(use-package undo-fu
+  :defer t
+  :bind (:map custom-bindings-map
+              ("C-_" . undo-fu-only-undo)
+              ("M-_" . undo-fu-only-redo)))
 
 ;; Undo Tree
 
@@ -686,362 +572,1561 @@
   :bind
   (("C-c w u" . undo-tree-visualise)))
 
-;; Export citations with Org Mode
+(use-package move-dup
+  :bind (:map custom-bindings-map
+              (("C-M-<up>"    . move-dup-move-lines-up)
+               ("C-M-<down>"  . move-dup-move-lines-down)
+               ("C-M-<left>"  . move-dup-move-lines-up)
+               ("C-M-<right>" . move-dup-move-lines-down)
+               ("M-W"         . move-dup-duplicate-down))))
 
-(require 'oc-natbib)
-(require 'oc-csl)
+(define-key custom-bindings-map (kbd "C-j") 'join-line)
 
-(setq org-cite-global-bibliography '("~/Documents/Academia/library.bib")
-      org-cite-insert-processor 'citar
-      org-cite-follow-processor 'citar
-      org-cite-activate-processor 'citar)
+(define-key custom-bindings-map
+            (kbd "M-j")
+            (lambda ()
+              (interactive)
+              (join-line -1)))
 
-;; Lookup words in online dictionaries
+(define-key custom-bindings-map (kbd "C-S-k") 'kill-whole-line)
 
-(use-package dictionary
-  :custom
-  (dictionary-server "dict.org")
-  :bind
-  (("C-c w s d" . dictionary-lookup-definition)))
+(use-package crux
+  :defer t
+  :bind (:map custom-bindings-map
+         ("C-S-<return>" . crux-smart-open-line-above)
+         ("M-S-<down>"   . crux-duplicate-current-line-or-region)))
 
-(use-package powerthesaurus
-  :bind
-  (("C-c w s p" . powerthesaurus-transient)))
+;; Buffers and navigation 
+(defun jah/kill-buffer (&optional arg)
+"When called with a prefix argument -- i.e., C-u -- kill all interesting
+buffers -- i.e., all buffers without a leading space in the buffer-name.
+When called without a prefix argument, kill just the current buffer
+-- i.e., interesting or uninteresting."
+(interactive "P")
+  (cond
+    ((and (consp arg) (equal arg '(4)))
+      (mapc
+        (lambda (x)
+          (let ((name (buffer-name x)))
+            (unless (eq ?\s (aref name 0))
+              (kill-buffer x))))
+        (buffer-list)))
+    (t
+      (kill-buffer (current-buffer)))))
 
-;; Writegood-Mode for weasel words, passive writing and repeated word detection
+(define-key custom-bindings-map (kbd "C-c k") 'jah/kill-buffer)
 
-(use-package writegood-mode
-  :bind
-  (("C-c w s r" . writegood-reading-ease))
-  :hook
-  (text-mode . writegood-mode))
+(defun split-window-sensibly-prefer-horizontal (&optional window)
+"Based on `split-window-sensibly', but prefers to split WINDOW side-by-side."
+  (let ((window (or window (selected-window))))
+    (or (and (window-splittable-p window t)
+         ;; Split window horizontally
+         (with-selected-window window
+           (split-window-right)))
+    (and (window-splittable-p window)
+         ;; Split window vertically
+         (with-selected-window window
+           (split-window-below)))
+    (and
+         ;; If WINDOW is the only usable window on its frame (it is
+         ;; the only one or, not being the only one, all the other
+         ;; ones are dedicated) and is not the minibuffer window, try
+         ;; to split it horizontally disregarding the value of
+         ;; `split-height-threshold'.
+         (let ((frame (window-frame window)))
+           (or
+            (eq window (frame-root-window frame))
+            (catch 'done
+              (walk-window-tree (lambda (w)
+                                  (unless (or (eq w window)
+                                              (window-dedicated-p w))
+                                    (throw 'done nil)))
+                                frame)
+              t)))
+     (not (window-minibuffer-p window))
+     (let ((split-width-threshold 0))
+       (when (window-splittable-p window t)
+         (with-selected-window window
+               (split-window-right))))))))
 
-;; Titlecasing
+(defun split-window-really-sensibly (&optional window)
+  (let ((window (or window (selected-window))))
+    (if (> (window-total-width window) (* 2 (window-total-height window)))
+        (with-selected-window window (split-window-sensibly-prefer-horizontal window))
+      (with-selected-window window (split-window-sensibly window)))))
 
-(use-package titlecase
-  :bind
-  (("C-c w s t" . titlecase-dwim)
-   ("C-c w s c" . ews-org-headings-titlecase)))
+(setq split-window-preferred-function 'split-window-really-sensibly)
 
-;; Abbreviations
+(setq-default split-height-threshold nil
+              split-width-threshold  nil
+              fill-column            80) ;; Maximum line width
+              ;; window-min-width       80) ;; No smaller windows than this
 
-(add-hook 'text-mode-hook 'abbrev-mode)
+(use-package switch-window
+  :bind (:map custom-bindings-map
+              ("C-x o" . 'switch-window)
+              ("C-x 1" . 'switch-window-then-maximize)
+              ("C-x 2" . 'switch-window-then-split-below)
+              ("C-x 3" . 'switch-window-then-split-right)
+              ("C-x 0" . 'switch-window-then-delete)))
 
-;; Lorem Ipsum generator
+(use-package transpose-frame
+  :bind (:map custom-bindings-map
+              ("C-c f" . 'flop-frame)))
 
-(use-package lorem-ipsum
-  :custom
-  (lorem-ipsum-list-bullet "- ") ;; Org mode bullets
+;; Project management 
+(use-package projectile
+  :defer t
+  :bind (:map custom-bindings-map
+              ("C-c w p" . projectile-command-map))
+  :config
+  (add-to-list 'projectile-project-search-path "~/Dropbox/projects/")
+  (add-to-list 'projectile-project-search-path "~/Dropbox/playground/")
   :init
-  (setq lorem-ipsum-sentence-separator
-        (if sentence-end-double-space "  " " "))
-  :bind
-  (("C-c w s i" . lorem-ipsum-insert-paragraphs)))
+  (projectile-mode))
 
-;; ediff
+(setq ibuffer-saved-filter-groups
+      '(("default"
+         ("Programming"   (predicate . (derived-mode-p 'prog-mode)))
+         ("Clojure/CIDER" (or (name  . "clojure")
+                              (name  . "cider")
+                              (name  . "nrepl")))
+         ("Org"           (mode . org-mode))
+         ("Dired"         (mode . dired-mode))
+         ("Magit"         (name . "magit")))))
 
-(use-package ediff
+(add-hook 'ibuffer-mode-hook
+          (lambda ()
+            (ibuffer-switch-to-saved-filter-groups "default")))
+
+(setq ibuffer-never-show-predicates
+      '(;; System buffers
+        "^\\*Messages\\*$"
+        "^\\*scratch\\*$"
+        "^\\*Completions\\*$"
+        "^\\*Help\\*$"
+        "^\\*Apropos\\*$"
+        "^\\*info\\*$"
+        "^\\*Async-native-compile-log\\*$"
+
+        ;; LSP Buffers
+        "^\\*lsp-log\\*$"
+        "^\\*clojure-lsp\\*$"
+        "^\\*clojure-lsp::stderr\\*$"
+        "^\\*ts-ls\\*$"
+        "^\\*ts-ls::stderr\\*$"))
+
+(setq ibuffer-formats
+      '((mark " " (name 60 -1 :left))))
+
+;; Dired 
+(use-package dired
   :ensure nil
-  :custom
-  (ediff-keep-variants nil)
-  (ediff-split-window-function 'split-window-horizontally)
-  (ediff-window-setup-function 'ediff-setup-windows-plain))
+  :hook (dired-mode . dired-hide-details-mode)
+  :bind (:map dired-mode-map
+              ("C-<right>" . dired-find-alternate-file)
+              ("C-<left>"  . dired-up-directory)
+              ("C-<down>"  . dired-find-alternate-file)
+              ("C-<up>"    . dired-up-directory)
+              ("c"         . dired-create-empty-file))
+  :config
+  (when (and (eq system-type 'darwin) (executable-find "gls"))
+    (setq dired-use-ls-dired nil)))
 
-;; Enable Other text modes
+(put 'dired-find-alternate-file 'disabled nil) ; disables warning
+(define-key dired-mode-map (kbd "RET") 'dired-find-alternate-file) ; was dired-advertised-find-file
+(define-key dired-mode-map (kbd "^") (lambda () (interactive) (find-alternate-file "..")))  ; was dired-up-directory
 
-;; Fountain mode for writing scripts
-
-(use-package fountain-mode)
-
-;; Markdown mode
-
-(use-package markdown-mode)
-
-;; PUBLICATION
-
-;; Generic Org Export Settings
-
-(use-package org
-  :custom
-  (org-export-with-drawers nil)
-  (org-export-with-todo-keywords nil)
-  (org-export-with-toc nil)
-  (org-export-with-smart-quotes t)
-  (org-export-date-timestamp-format "%e %B %Y"))
-
-;; epub export
-
-(use-package ox-epub
-  :demand t
-  :init
-  (require 'ox-org))
-
-;; LaTeX PDF Export settings
-
-(use-package ox-latex
-  :ensure nil
-  :demand t
-  :custom
-  ;; Multiple LaTeX passes for bibliographies
-  (org-latex-pdf-process
-   '("pdflatex -interaction nonstopmode -output-directory %o %f"
-     "bibtex %b"
-     "pdflatex -shell-escape -interaction nonstopmode -output-directory %o %f"
-     "pdflatex -shell-escape -interaction nonstopmode -output-directory %o %f"))
-  ;; Clean temporary files after export
-  (org-latex-logfiles-extensions
-   (quote ("lof" "lot" "tex~" "aux" "idx" "log" "out"
-           "toc" "nav" "snm" "vrb" "dvi" "fdb_latexmk"
-           "blg" "brf" "fls" "entoc" "ps" "spl" "bbl"
-           "tex" "bcf"))))
-
-;; EWS paperback configuration
-
-(with-eval-after-load 'ox-latex
-  (add-to-list
-   'org-latex-classes
-   '("ews"
-     "\\documentclass[11pt, twoside, hidelinks]{memoir}
-      \\setstocksize{9.25in}{7.5in}
-      \\settrimmedsize{\\stockheight}{\\stockwidth}{*}
-      \\setlrmarginsandblock{1.5in}{1in}{*} 
-      \\setulmarginsandblock{1in}{1.5in}{*}
-      \\checkandfixthelayout
-      \\layout
-      \\setcounter{tocdepth}{0}
-      \\setsecnumdepth{subsection}
-      \\renewcommand{\\baselinestretch}{1.2}
-      \\setheadfoot{0.5in}{0.75in}
-      \\setlength{\\footskip}{0.8in}
-      \\chapterstyle{bianchi}
-      \\renewcommand{\\beforechapskip}{-30pt}
-      \\setsecheadstyle{\\normalfont \\raggedright \\textbf}
-      \\setsubsecheadstyle{\\normalfont \\raggedright \\emph}
-      \\setsubsubsecheadstyle{\\normalfont\\centering}
-      \\pagestyle{myheadings}
-      \\usepackage[font={small, it}]{caption}
-      \\usepackage{ccicons}
-      \\usepackage{ebgaramond}
-      \\usepackage[authoryear]{natbib}
-      \\bibliographystyle{apalike}
-      \\usepackage{svg}
-      \\hyphenation{mini-buffer}
-      \\renewcommand{\\LaTeX}{LaTeX}
-      \\renewcommand{\\TeX}{TeX}"
-     ("\\chapter{%s}" . "\\chapter*{%s}")
-     ("\\section{%s}" . "\\section*{%s}")
-     ("\\subsection{%s}" . "\\subsection*{%s}")
-     ("\\subsubsection{%s}" . "\\subsubsection*{%s}"))))
-
-;; Bind org agenda command and custom agenda
-(use-package org
-    :custom
-    (org-agenda-files '("~/Documents/notes/" "~/Documents/org/"))
-    (org-agenda-custom-commands
-     '(("e" "Agenda, next actions and waiting"
-        ((agenda "" ((org-agenda-overriding-header "Next three days:")
-                     (org-agenda-span 3)
-                     (org-agenda-start-on-weekday nil)))
-         (todo "NEXT" ((org-agenda-overriding-header "Next Actions:")))
-         (todo "WAIT" ((org-agenda-overriding-header "Waiting:")))))
-       ("r" . "Research Notes")
-       ("rpa" "People alphabetically"
-        tags "+biography"
-        ((org-agenda-overriding-header "People A-Z:")
-         (org-agenda-sorting-strategy '(alpha-up))
-         (org-agenda-skip-function '(org-agenda-skip-entry-if 'nottop))))
-       ("rt" "Themes and synthesis"
-        tags "+bridge"
-        ((org-agenda-overriding-header "Analysis & Synthesis Notes:")
-         (org-agenda-sorting-strategy '(time-up))
-         (org-agenda-skip-function '(org-agenda-skip-entry-if 'nottop))))))
-    :bind
-    (("C-c a" . org-agenda)))
-
-;; Set your Org-roam directory
-(setq org-roam-directory "~/Documents/notes")
-
-(defvar jh/org-roam-source-notes-cache nil)
-(defvar jh/org-roam-source-notes-cache-time nil)
-(defvar jh/org-roam-source-notes-cache-ttl 300) ;; cache for 5 minutes
-(defvar jh/org-roam-source-notes-current-filter "")
-
-(defun jh/refresh-org-roam-source-notes-cache ()
-  "Refresh the cached list of org-roam source notes."
+;; Completion 
+(defun jah/take-me-home ()
   (interactive)
-  (message "Refreshing org-roam source notes cache...")
-  (let* ((notes-dir org-roam-directory)
-         (files (directory-files-recursively notes-dir "\\.org$"))
-         (results '()))
-    (dolist (file files)
-      (with-temp-buffer
-        (insert-file-contents file)
-        (let* ((title (progn
-                        (goto-char (point-min))
-                        (when (re-search-forward "^#\\+TITLE: *\\(.*\\)" nil t)
-                          (match-string 1))))
-               (date (progn
-                       (goto-char (point-min))
-                       (if (re-search-forward "^:DATE: *\\(.*\\)" nil t)
-                           (match-string 1)
-                         "No date")))
-               (filetags (progn
-                           (goto-char (point-min))
-                           (when (re-search-forward "^#\\+FILETAGS: *\\(.*\\)" nil t)
-                             (match-string 1))))
-               (source (progn
-                         (when filetags
-                           (when (string-match "source/\\([^:]+\\)" filetags)
-                             (match-string 1 filetags))))))
-          (when (and filetags
-                     (string-match-p "source" filetags))
-            (push (list date file title filetags source) results)))))
-    (setq jh/org-roam-source-notes-cache results)
-    (setq jh/org-roam-source-notes-cache-time (current-time))))
+  (if (looking-back "/" nil)
+      (progn (call-interactively 'delete-minibuffer-contents) (insert "~/"))
+    (call-interactively 'self-insert-command)))
 
-(defun jh/list-org-roam-source-notes-by-date (&optional filter)
-  "List cached org-roam source notes, optionally FILTERed by subtype like 'letter' or 'newspaper'."
-  (interactive
-   (let* ((tags
-           (delete-dups
-            (cl-loop for entry in jh/org-roam-source-notes-cache
-                     for filetags = (nth 3 entry)
-                     when (and filetags (string-match "source/\\([^:]+\\)" filetags))
-                     collect (match-string 1 filetags)))))
-     (list
-      (completing-read
-       "Filter by source subtype (leave blank for all): "
-       tags nil t))))
+(use-package vertico
+  :defer t
+  :bind (:map vertico-map ("~" . jah/take-me-home))
+  :config
+  (vertico-mode)
+  (vertico-multiform-mode)
+  (setq read-extended-command-predicate       'command-completion-default-include-p
+        vertico-count                         32  ; Show more candidates
+        read-file-name-completion-ignore-case t   ; Ignore case of file names
+        read-buffer-completion-ignore-case    t   ; Ignore case in buffer completion
+        completion-ignore-case                t)) ; Ignore case in completion
+
+(use-package vertico-posframe
+  :init
+  (setq vertico-posframe-parameters   '((left-fringe  . 12)    ;; Fringes
+                                        (right-fringe . 12)
+                                        (undecorated  . nil))) ;; Rounded frame
+  :config
+  (vertico-posframe-mode 1)
+  (setq vertico-posframe-width        96                       ;; Narrow frame
+        vertico-posframe-height       vertico-count            ;; Default height
+        ;; Don't create posframe for these commands
+        vertico-multiform-commands    '((consult-line    (:not posframe))
+                                        (consult-ripgrep (:not posframe)))))
+
+(use-package corfu
+  :defer t
+  :custom
+  (corfu-auto          t)
+  (corfu-auto-delay    0.1)
+  (corfu-auto-prefix   1)
+  (corfu-cycle         t)
+  (corfu-quit-no-match 'separator)
+  :init
+  (global-corfu-mode))
+
+(setq tab-always-indent 'complete)
+
+(use-package orderless
+  :ensure t
+  :config
+  (setq completion-styles '(orderless basic partial-completion)
+        completion-category-overrides '((file (styles basic partial-completion)))))
+
+;; (use-package copilot
+;;   :vc (:url "https://github.com/copilot-emacs/copilot.el"
+;;             :rev :newest
+;;             :branch "main")
+;;   ; :hook (prog-mode . copilot-mode)
+;;   :bind (:map copilot-completion-map
+;;               ("C-<tab>" . copilot-accept-completion))
+;;   :config (setq copilot-indent-offset-warning-disable t))
+
+;; Search 
+(use-package ripgrep
+  :defer t)
+
+(use-package rg
+  :defer t)
+
+(use-package ag
+  :defer t)
+
+(use-package wgrep
+  :defer t)
+
+(setq grep-command "rg -nS --no-heading "
+      grep-use-null-device nil)
+
+;; Consult 
+(use-package consult
+  :bind (:map custom-bindings-map
+              ("C-s"     . consult-line)
+              ("C-M-s"   . consult-ripgrep)
+              ("C-x b"   . consult-buffer)
+              ("C-x C-b" . consult-buffer)
+              ("M-g g"   . consult-goto-line)
+              ("M-g t"   . consult-imenu)
+              ("M-g a"   . consult-imenu-multi)))
+
+;; Imenu 
+(use-package imenu-list
+  :defer t
+  :bind (:map custom-bindings-map
+              ("M-g i" . imenu-list-smart-toggle)))
+
+;; Marginalia
+(use-package marginalia
+  :init 
+  (marginalia-mode 1))
+
+;; Misc 
+(use-package diff-hl
+  :config
+  (global-diff-hl-mode))
+
+(use-package magit
+  :defer t
+  :bind (:map magit-mode-map
+              ("C-M-f" . magit-section-forward)
+              ("C-M-b" . magit-section-backward))
+  :bind (:map custom-bindings-map
+              ("M-g b" . magit-blame-addition))
+  :hook
+  ((magit-pre-refresh  . diff-hl-magit-pre-refresh)
+   (magit-post-refresh . diff-hl-magit-post-refresh))
+  :config
+  (setq magit-mode-quit-window 'magit-restore-window-configuration
+		magit-auto-revert-mode t)
+  ; Remove tags from status buffer headings to speed up refresh slightly
+  (remove-hook 'magit-status-sections-hook 'magit-insert-tags-header))
+
+(use-package forge
+  :after magit)
+
+(use-package blamer
+  :after magit
+  :bind (("C-c g i" . blamer-show-commit-info)
+         ("C-c g b" . blamer-show-posframe-commit-info))
+  :defer 20
+  :custom
+  (blamer-idle-time                 0.3)
+  (blamer-min-offset                4)
+  (blamer-max-commit-message-length 100)
+  (blamer-datetime-formatter        "[%s]")
+  (blamer-commit-formatter          " ● %s")
+  :custom-face
+  (blamer-face ((t :foreground "#7aa2cf"
+                    :background nil
+                    :height 1
+                    :italic nil))))
+
+(use-package git-link
+  :defer t
+  :init
+  (setq git-link-use-commit t
+        git-link-open-in-browser t))
+
+(use-package git-timemachine
+  :defer t)
+
+;; Try packages 
+(use-package try)
+
+;; Snippets 
+(use-package yasnippet
+  :diminish yas-minor-mode
+  :defer 5
+  :config
+  (setq yas-snippet-dirs '("~/.config/emacs/snippets/"))
+  (yas-global-mode 1)) ;; or M-x yas-reload-all if you've started YASnippet already.
+
+;; Silences the warning when running a snippet with backticks (runs a command in the snippet)
+(require 'warnings)
+(add-to-list 'warning-suppress-types '(yasnippet backquote-change)) 
+
+;; Better buffers 
+(use-package helpful
+  :bind (:map custom-bindings-map
+			  ("C-h f" . #'helpful-function)
+			  ("C-h v" . #'helpful-variable)
+			  ("C-h k" . #'helpful-key)
+			  ("C-h x" . #'helpful-command)
+			  ("C-h d" . #'helpful-at-point)
+			  ("C-h c" . #'helpful-callable)))
+
+(use-package which-key
+  :config
+  (which-key-mode))
+
+;; Spellcheck 
+;; (use-package jinx
+;;   :hook (emacs-startup . global-jinx-mode)
+;;   :bind (("M-$"   . jinx-correct)
+;;          ("C-M-$" . jinx-languages))
+;;   :config
+;;   (setq jinx-languages "en_GB"))
+
+;; LaTeX 
+(use-package auctex
+  :hook
+  (LaTeX-mode . turn-on-prettify-symbols-mode)
+  (LaTeX-mode . reftex-mode)
+  (LaTeX-mode . outline-minor-mode)
+  (LaTeX-mode . olivetti-mode))
+
+(setq reftex-toc-split-windows-horizontally t
+	  reftex-toc-split-windows-fraction     0.2)
+
+;; PDF tools 
+(use-package pdf-tools
+  :defer t
+  :init (pdf-loader-install)
+  :hook ((pdf-view-mode . (lambda () (auto-revert-mode -1)))
+         (pdf-view-mode . (lambda () (company-mode -1))))
+  :bind (:map pdf-view-mode-map
+              ("C-s"   . isearch-forward)
+              ("C-M-s" . pdf-occur)))
+
+(use-package doc-view
+  :hook (doc-view-mode . (lambda ()
+                           (display-warning
+                            emacs
+                            "Oops, using DocView instead of PDF Tools!"
+                            :warning))))
+
+(use-package pdf-view-restore
+  :after pdf-tools
+  :config
+  (add-hook 'pdf-view-mode-hook 'pdf-view-restore-mode))
+
+;; epub reading 
+(use-package nov
+  :defer t
+  :config
+  (add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode)))
+
+;; Editor config
+(use-package editorconfig
+  :defer t)
+
+;; Feed reading 
+(use-package elfeed
+  :bind (:map custom-bindings-map ("C-x w" . elfeed))
+  :config
+  (setq elfeed-feeds
+      '("http://nullprogram.com/feed/"
+        "https://planet.emacslife.com/atom.xml"
+        "https://deniskyashif.com/index.xml")))
+
+;; Config profiling 
+(use-package esup
+  :defer t
+  :config
+  (setq esup-depth 0))
+
+;; Org 
+(use-package org
+  :defer t
+
+;; Visuals 
+;;:hook (org-mode . olivetti-mode) -- not sure I like this yet
+
+:config
+;; Resize Org headings
+(custom-set-faces
+'(org-document-title ((t (:height 1.2))))
+'(outline-1          ((t (:height 1.2))))
+'(outline-2          ((t (:height 1.2))))
+'(outline-3          ((t (:height 1.2))))
+'(outline-4          ((t (:height 1.2))))
+'(outline-5          ((t (:height 1.2))))
+'(outline-6          ((t (:height 1.2))))
+'(outline-7          ((t (:height 1.2))))
+'(outline-8          ((t (:height 1.2))))
+'(outline-9          ((t (:height 1.2)))))
+
+(org-indent-mode -1)
+
+(setq org-startup-with-latex-preview t)
+
+(plist-put org-format-latex-options :scale 1.35)
+
+(let ((png (cdr (assoc 'dvipng org-preview-latex-process-alist))))
+    (plist-put png :latex-compiler '("latex -interaction nonstopmode -output-directory %o %F"))
+    (plist-put png :image-converter '("dvipng -D %D -T tight -o %O %F"))
+    (plist-put png :transparent-image-converter '("dvipng -D %D -T tight -bg Transparent -o %O %F")))
+
+(setq org-startup-folded 'content)
+
+(setq org-adapt-indentation t
+      org-hide-leading-stars t
+      org-pretty-entities t
+      org-ellipsis "  ·")
+
+(setq org-src-fontify-natively t
+      org-src-tab-acts-natively t
+      org-edit-src-content-indentation 0)
+
+(setq org-log-done                       t
+      org-auto-align-tags                t
+      org-tags-column                    -80
+      org-fold-catch-invisible-edits     'show-and-error
+      org-special-ctrl-a/e               t
+      org-insert-heading-respect-content t)
+
+)
+
+(use-package org-appear
+  :commands (org-appear-mode)
+  :hook     (org-mode . org-appear-mode)
+  :config 
+  (setq org-hide-emphasis-markers t)  ;; Must be activated for org-appear to work
+  (setq org-appear-autoemphasis   t   ;; Show bold, italics, verbatim, etc.
+        org-appear-autolinks      t))   ;; Show links
+
+(setq org-startup-with-inline-images t)
+
+(add-hook 'org-mode-hook 'variable-pitch-mode)
+
+(use-package org-fragtog
+  :after org
+  :hook (org-mode . org-fragtog-mode))
+
+(use-package org-superstar
+  :after org
+  :config
+  (setq org-superstar-leading-bullet " ")
+  (setq org-superstar-headline-bullets-list '("◆" "◇" "•" "⚬" "●" "○"))
+  (setq org-superstar-special-todo-items t) ;; Makes TODO header bullets into boxes
+  (setq org-superstar-todo-bullet-alist '(("TODO"     . 9744)
+                                          ("PROG"     . 9744)
+                                          ("NEXT"     . 9744)
+                                          ("WAIT"     . 9744)
+                                          ("DROP"     . 9744)
+                                          ("QUESTION" . 9744)
+                                          ("DONE"     . 9745)))
+  :hook (org-mode . org-superstar-mode))
+
+(use-package svg-tag-mode
+  :after org
+  :config
+  (defconst date-re "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}")
+  (defconst time-re "[0-9]\\{2\\}:[0-9]\\{2\\}")
+  (defconst day-re "[A-Za-z]\\{3\\}")
+  (defconst day-time-re (format "\\(%s\\)? ?\\(%s\\)?" day-re time-re))
+
+  (defun svg-progress-percent (value)
+	(svg-image (svg-lib-concat
+				(svg-lib-progress-bar (/ (string-to-number value) 100.0)
+			      nil :margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
+				(svg-lib-tag (concat value "%")
+				  nil :stroke 0 :margin 0)) :ascent 'center))
+
+  (defun svg-progress-count (value)
+	(let* ((seq (mapcar #'string-to-number (split-string value "/")))
+           (count (float (car seq)))
+           (total (float (cadr seq))))
+	  (svg-image (svg-lib-concat
+				  (svg-lib-progress-bar (/ count total) nil
+					:margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
+				  (svg-lib-tag value nil
+					:stroke 0 :margin 0)) :ascent 'center)))
+  (setq svg-tag-tags
+      `(;; Org tags
+        ;; (":\\([A-Za-z0-9]+\\)" . ((lambda (tag) (svg-tag-make tag))))
+        ;; (":\\([A-Za-z0-9]+[ \-]\\)" . ((lambda (tag) tag)))
+        
+        ;; Task priority
+        ("\\[#[A-Z]\\]" . ( (lambda (tag)
+                              (svg-tag-make tag :face 'org-priority 
+                                            :beg 2 :end -1 :margin 0))))
+
+        ;; Progress
+        ("\\(\\[[0-9]\\{1,3\\}%\\]\\)" . ((lambda (tag)
+          (svg-progress-percent (substring tag 1 -2)))))
+        ("\\(\\[[0-9]+/[0-9]+\\]\\)" . ((lambda (tag)
+          (svg-progress-count (substring tag 1 -1)))))
+        
+        ;; TODO / DONE
+        ;; ("TODO" . ((lambda (tag) (svg-tag-make "TODO" :face 'org-todo
+		;; 									           :inverse t :margin 0))))
+        ;; ("DONE" . ((lambda (tag) (svg-tag-make "DONE" :face 'org-done :margin 0))))
 
 
-  ;; Use cache if stale
-  (when (or (not jh/org-roam-source-notes-cache)
-            (not jh/org-roam-source-notes-cache-time)
-            (> (float-time (time-subtract (current-time) jh/org-roam-source-notes-cache-time))
-               jh/org-roam-source-notes-cache-ttl))
-    (jh/refresh-org-roam-source-notes-cache))
+        ;; Citation of the form [cite:@Knuth:1984] 
+        ("\\(\\[cite:@[A-Za-z]+:\\)" . ((lambda (tag)
+                                          (svg-tag-make tag
+                                                        :inverse t
+                                                        :beg 7 :end -1
+                                                        :crop-right t))))
+        ("\\[cite:@[A-Za-z]+:\\([0-9]+\\]\\)" . ((lambda (tag)
+                                                (svg-tag-make tag
+                                                              :end -1
+                                                              :crop-left t))))
 
-  (let* ((filtered
-          (cl-remove-if-not
-           (lambda (entry)
-             (let ((tags (nth 3 entry)))
-               (or (string= filter "")
-                   (and tags (string-match-p (concat "source/" (regexp-quote filter)) tags)))))
-           jh/org-roam-source-notes-cache))
-         (sorted
-          (sort filtered
-                (lambda (a b)
-                  (let ((d1 (car a))
-                        (d2 (car b)))
-                    (cond
-                     ((string= d1 "No date") nil)
-                     ((string= d2 "No date") t)
-                     (t (string< d1 d2))))))))
+        
+        ;; Active date (with or without day name, with or without time)
+        (,(format "\\(<%s>\\)" date-re) .
+         ((lambda (tag)
+            (svg-tag-make tag :beg 1 :end -1 :margin 0))))
+        (,(format "\\(<%s \\)%s>" date-re day-time-re) .
+         ((lambda (tag)
+            (svg-tag-make tag :beg 1 :inverse nil :crop-right t :margin 0))))
+        (,(format "<%s \\(%s>\\)" date-re day-time-re) .
+         ((lambda (tag)
+            (svg-tag-make tag :end -1 :inverse t :crop-left t :margin 0))))
 
-    ;; Output buffer
-    (with-current-buffer (get-buffer-create "*Chronological Source Notes*")
-      (read-only-mode -1)
-      (erase-buffer)
-      (insert "* Chronological Source Notes\n\n")
-      (insert (format "%-10s   %-15s   %s\n" "DATE" "SOURCE" "TITLE"))
-      (insert (make-string 80 ?-) "\n")
-      (dolist (entry sorted)
-        (let ((date (nth 0 entry))
-              (path (nth 1 entry))
-              (title (nth 2 entry))
-              (source (or (nth 4 entry) "unknown")))
-          (insert (format "%-10s   %-15s   [[file:%s][%s]]\n" date source path title))))
-      (goto-char (point-min))
-      (org-mode)
-      (read-only-mode 1)
-      (switch-to-buffer (current-buffer)))))
+        ;; Inactive date  (with or without day name, with or without time)
+         (,(format "\\(\\[%s\\]\\)" date-re) .
+          ((lambda (tag)
+             (svg-tag-make tag :beg 1 :end -1 :margin 0 :face 'org-date))))
+         (,(format "\\(\\[%s \\)%s\\]" date-re day-time-re) .
+          ((lambda (tag)
+             (svg-tag-make tag :beg 1 :inverse nil :crop-right t :margin 0 :face 'org-date))))
+         (,(format "\\[%s \\(%s\\]\\)" date-re day-time-re) .
+          ((lambda (tag)
+             (svg-tag-make tag :end -1 :inverse t :crop-left t :margin 0 :face 'org-date)))))))
+
+(add-hook 'org-mode-hook 'svg-tag-mode)
+
+;; (defun jah/prettify-symbols-setup ()
+;;   "Beautify keywords"
+;;   (interactive)
+;;   (setq prettify-symbols-alist
+;; 		(mapcan (lambda (x)
+;;                   (when (and (consp x) (stringp (car x)))
+;;                     (list x (cons (upcase (car x)) (cdr x)))))
+;; 				'(; Greek symbols
+;; 				  ("lambda" . ?λ)
+;; 				  ("delta"  . ?Δ)
+;; 				  ("gamma"  . ?Γ)
+;; 				  ("phi"    . ?φ)
+;; 				  ("psi"    . ?ψ)
+;;                   ; Org headers
+;; 				  ("#+title:"  . ? )
+;; 				  ("#+author:" . ? )
+;;                   ("#+date:"   . ? )                
+;;                   ; Checkboxes
+;; 				  ("[ ]" . ?)
+;; 				  ("[X]" . ?)
+;; 				  ("[-]" . ?)
+;;                   ; Blocks
+;; 				  ("#+begin_src"   . ?) ; 
+;; 				  ("#+end_src"     . ?)
+;; 				  ("#+begin_QUOTE" . ?‟)
+;; 				  ("#+end_QUOTE"   . ?”)
+;;                   ; Drawers
+;; 				  (":properties:" . ?)
+;;                   ; Agenda scheduling
+;; 				  ("SCHEDULED:"   . ?🕘)
+;; 				  ("DEADLINE:"    . ?⏰)
+;;                   ; Agenda tags  
+;; 				  (":@projects:"  . ?☕)
+;; 				  (":work:"       . ?🚀)
+;; 				  (":@inbox:"     . ?✉)
+;; 				  (":goal:"       . ?🎯)
+;; 				  (":task:"       . ?📋)
+;; 				  (":@thesis:"    . ?📝)
+;; 				  (":thesis:"     . ?📝)
+;; 				  (":emacs:"      . ?)
+;; 				  (":learn:"      . ?🌱)
+;; 				  (":code:"       . ?💻)
+;; 				  (":fix:"        . ?🛠)
+;; 				  (":bug:"        . ?🚩)
+;; 				  (":read:"       . ?📚)
+;;                   ; Roam tags
+;; 				  ("#+filetags:"  . ?📎)
+;; 				  (":wip:"        . ?🏗)
+;; 				  (":ct:"         . ?➡)    ; Category Theory
+;;                   (":verb:"       . ?🌐) ; HTTP Requests in Org mode
+;;                   )))
+;;   (prettify-symbols-mode))
+;;
+;; (add-hook 'org-mode-hook        #'jah/prettify-symbols-setup)
+;; (add-hook 'org-agenda-mode-hook #'jah/prettify-symbols-setup)
+
+(add-to-list 'font-lock-extra-managed-props 'display)
+(font-lock-add-keywords 'org-mode
+                        `(("^.*?\\( \\)\\(:[[:alnum:]_@#%:]+:\\)$"
+                           (1 `(face nil
+                                     display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
+                              prepend))) t)
+
+;; General 
+(add-hook 'org-mode-hook #'(lambda () (electric-indent-local-mode -1)))
+
+(setq org-link-frame-setup
+      '((vm      . vm-visit-folder-other-frame)
+        (vm-imap . vm-visit-imap-folder-other-frame)
+        (gnus    . org-gnus-no-new-news)
+        (file    . find-file)
+        (wl      . wl-other-frame)))
+
+(setq org-return-follows-link t)
+
+(setq org-blank-before-new-entry '((heading . nil)
+                                   (plain-list-item . nil)))
+
+;; Agenda 
+(setq org-agenda-start-on-weekday nil
+      org-agenda-block-separator  nil
+      org-agenda-remove-tags      t)
+
+(use-package org-super-agenda
+  :after org
+  :config
+  (setq org-super-agenda-header-prefix "\n❯ ")
+  ;; Hide the thin width char glyph
+  (add-hook 'org-agenda-mode-hook
+            #'(lambda () (setq-local nobreak-char-display nil)))
+  (org-super-agenda-mode))
+
+(use-package org-ql
+  :after org
+  :config
+  (when (boundp 'org-ql-views)
+    (add-to-list 'org-ql-views
+                 '("Questions" :buffers-files org-agenda-files :query
+                   (and
+                    (not
+                     (done))
+                    (todo "QUESTION"))
+                   :sort
+                   (todo priority date)
+                   :super-groups org-super-agenda-groups :title "Agenda-like"))))
+
+;; Delete default agenda commands
+(setq org-agenda-custom-commands nil)
+
+(defvar regular-view-groups
+  '((:name "Scheduled"
+     :scheduled t
+     :order 1)
+	(:name "Deadlines"
+     :deadline t
+     :order 2)))
+
+(add-to-list 'org-agenda-custom-commands
+	  '("d" "Day View"
+		 ((agenda "" ((org-agenda-overriding-header "Day View")
+                      (org-agenda-span 'day)
+                      (org-super-agenda-groups regular-view-groups)))
+		  (org-ql-block '(todo "PROG") ((org-ql-block-header "\n❯ In Progress")))
+		  (org-ql-block '(todo "NEXT") ((org-ql-block-header "\n❯ Next Up")))
+          (org-ql-block '(todo "WAIT") ((org-ql-block-header "\n❯ Backlog")))
+		  (org-ql-block '(priority "A") ((org-ql-block-header "\n❯ Important"))))))
 
 
+(add-to-list 'org-agenda-custom-commands
+		'("e" "Three-Day View"
+               ((agenda "" ((org-agenda-span 3)
+                            (org-agenda-start-on-weekday nil)
+                            (org-deadline-warning-days 0))))))
 
+(setq org-agenda-skip-deadline-if-done  t
+	  org-agenda-skip-scheduled-if-done t)
+
+(setq org-agenda-deadline-leaders '("Deadline:  " "In %2d d.: " "%2d d. ago: "))
+
+;; Tasks 
+(setq org-lowest-priority  ?F) ;; Gives us priorities A through F
+(setq org-default-priority ?E) ;; If an item has no priority, it is considered [#E].
+
+(setq org-priority-faces
+      '((65 . "#BF616A")
+        (66 . "#EBCB8B")
+        (67 . "#B48EAD")
+        (68 . "#81A1C1")
+        (69 . "#5E81AC")
+        (70 . "#4C566A")))
 
 (setq org-todo-keywords
-      '((sequence "TODO(t)" "NEXT(n)" "HOLD(h)" "|" "DONE(d)")))
+      '((sequence
+         ;; Needs further action
+		 "TODO(t)" "PROG(p)" "NEXT(n)" "WAIT(w)" "QUESTION(q) DROP(x)"
+		 "|"
+         ;; Needs no action currently
+		 "DONE(d)")))
 
-;; FILE MANAGEMENT
+(defun org-mark-as-done ()
+  (interactive)
+  (save-excursion
+    (org-back-to-heading t) ;; Make sure command works even if point is
+                            ;; below target heading
+    (cond ((looking-at "\*+ TODO")
+           (org-todo "DONE"))
+		  ((looking-at "\*+ NEXT")
+           (org-todo "DONE"))
+          ((looking-at "\*+ WAIT")
+           (org-todo "DONE"))
+		  ((looking-at "\*+ PROG")
+           (org-todo "DONE"))
+		  ((looking-at "\*+ DROP")
+           (org-todo "DONE"))
+		  ((looking-at "\*+ DROP")
+           (org-todo "QUESTION"))
+		  ((looking-at "\*+ DONE")
+           (org-todo "DONE"))
+          (t (message "Undefined TODO state.")))))
 
-(use-package dired
-  :ensure
-  nil
-  :commands
-  (dired dired-jump)
-  :custom
-  (dired-listing-switches
-   "-goah --group-directories-first --time-style=long-iso")
-  (dired-dwim-target t)
-  (delete-by-moving-to-trash t)
-  :init
-  (put 'dired-find-alternate-file 'disabled nil))
+(define-key custom-bindings-map (kbd "C-c d") 'org-mark-as-done)
 
-;; Hide or display hidden files
+(use-package hide-lines
+  :vc (:url "https://github.com/vapniks/hide-lines.git"
+       :branch "master"
+       :rev :newest))
 
-(use-package dired
+(defun hide-done-tasks ()
+  (interactive)
+  (hide-lines-matching "* DONE"))
+
+(defun show-done-tasks ()
+  (interactive)
+  (hide-lines-show-all))
+
+(setq org-directory "~/Documents/org/")
+(setq org-agenda-files (list org-directory))
+
+(setq org-archive-location (concat org-directory "archive.org::"))
+
+(setq org-capture-templates
+       `(("i" "Inbox" entry  (file "inbox.org")
+        ,(concat "* TODO %?\n"
+                 "/Entered on/ %U"))))
+(defun org-capture-inbox ()
+     (interactive)
+     (call-interactively 'org-store-link)
+     (org-capture nil "i"))
+
+(define-key custom-bindings-map (kbd "C-c l") 'org-store-link)
+(define-key custom-bindings-map (kbd "C-c a") 'org-agenda)
+(define-key custom-bindings-map (kbd "C-c c") 'org-capture)
+
+(with-eval-after-load 'org
+  (define-key org-mode-map (kbd "C-c t") 'org-todo)
+  (define-key org-mode-map (kbd "C-c C-x C-i") 'org-clock-in))
+
+(set-register ?i (cons 'file (concat org-directory "inbox.org")))
+(set-register ?w (cons 'file (concat org-directory "work.org")))
+
+(define-key custom-bindings-map (kbd "C-r") 'jump-to-register)
+
+;; Babel 
+(setq org-export-use-babel       nil
+      org-confirm-babel-evaluate nil)
+;; (org-babel-do-load-languages
+;;  'org-babel-load-languages
+;;  '((emacs-lisp . t)
+;;    (python     . t)
+;;    (haskell    . t)
+;;    (clojure    . t)))
+
+(use-package ob-python
   :ensure nil
-  :hook (dired-mode . dired-omit-mode)
-  :bind (:map dired-mode-map
-              ( "."     . dired-omit-mode))
-  :custom (dired-omit-files "^\\.[a-zA-Z0-9]+"))
-
-;; Backup files
-
-(setq-default backup-directory-alist
-              `(("." . ,(expand-file-name "backups/" user-emacs-directory)))
-              version-control t
-              delete-old-versions t
-              create-lockfiles nil)
-
-;; Recent files
-
-(use-package recentf
+  :after (ob python)
   :config
-  (recentf-mode t)
+  (setq org-babel-python-command python-shell-interpreter))
+
+;; Roam
+(use-package org-roam
+  :after org
+  :hook (org-roam-mode . org-roam-db-autosync-mode)
+  :init
+  (setq org-roam-v2-ack t)
   :custom
-  (recentf-max-saved-items 50)
+  (org-roam-directory "~/Documents/notes")
+  (org-roam-completion-everywhere t)
+  (org-roam-capture-templates
+   '(("d" "default" plain
+      "%?"
+      :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org" "#+title: ${title}\n#+date: %U\n#+filetags: \n\n")
+      :unnarrowed t)
+
+     ;; PRIMARY SOURCES
+     ("s" "Primary Source" plain
+      ":PROPERTIES:
+:ROAM_REFS: cite:@%^{Bibtex Key}
+:TYPE:     primary-source
+:DATE:     %<%Y-%m-%d>
+:CREATOR:  %^{Author/Creator}
+:PUBLISHER: %^{Publisher/Archive}
+:DATE_CREATED: %^{Date Created}
+:ARCHIVE_NAME: %^{Archive/Collection}
+:COLLECTION: %^{Collection}
+:SERIES: %^{Series}
+:BOX: %^{Box}
+:FOLDER: %^{Folder}
+:CALL_NUMBER: %^{Call Number}
+:ITEM_NUMBER: %^{Item Number}
+:PEOPLE: %^{People Mentioned}
+:ORGANIZATIONS: %^{Organizations}
+:LOCATIONS: %^{Locations}
+:TOPICS: %^{Topics/Themes}
+:SOURCE_URL: %^{Source URL}
+:ARCHIVE_LOCATION: %^{Physical Archive Location}
+:END:
+#+title: %^{Source Title}
+#+filetags: :project/sagebrush:source:primary:
+
+* Source Type
+%^{Source Type|Manuscript|Letter|Photograph|Government Doc|Newspaper|Oral History|Interview|Report|Other}
+
+* Abstract / Overview
+%^{Brief summary of what this is (who, what, where, when)}
+
+* Key Excerpts
+
+* Images
+
+* Transcription
+
+* Initial Observations
+#+BEGIN_COMMENT
+- What themes does this connect to? (link with [[id:xxx][concept notes]])
+- Who produced this? For what purpose?
+- What audience?
+- Relation to other sources?
+#+END_COMMENT
+
+* Links
+#+BEGIN_COMMENT
+Related people, places, links
+#+END_COMMENT
+
+* Notes"
+      :target (file+head "sagebrush/04-sources/%<%Y%m%d%H%M%S>-${slug}.org" "")
+      :unnarrowed t)
+
+     ;; RESEARCH NOTES
+     ("r" "Research Note" plain
+      ":PROPERTIES:
+:TYPE:     research-note
+:DATE:     %<%Y-%m-%d>
+:END:
+#+title: %^{Research Note Title}
+#+filetags: :project/sagebrush:research:analysis:
+
+* Core Idea
+#+BEGIN_COMMENT
+Specific analytical insight
+#+END_COMMENT
+%^{Core analytical insight}
+
+* Argument
+%?
+
+* Supporting Evidence
+
+* Related Concepts
+
+* Connections
+#+BEGIN_COMMENT
+Related people, events, places
+#+END_COMMENT
+
+* Implications
+#+BEGIN_COMMENT
+- Why does this matter?
+- How does it challenge/support existing scholarship?
+- Where might this appear in the narrative?
+#+END_COMMENT
+
+* Remaining Questions/Next Steps
+#+BEGIN_COMMENT
+- What's unclear or needs more evidence?
+- What to look for in further research?
+#+END_COMMENT"
+      :target (file+head "sagebrush/03-analysis/%<%Y%m%d%H%M%S>-${slug}.org" "")
+      :unnarrowed t)
+
+     ;; CONCEPT NOTES
+     ("c" "Concept Note" plain
+      ":PROPERTIES:
+:TYPE:     concept
+:DATE:     %<%Y-%m-%d>
+:TOPICS:   %^{Main Topics/Themes}
+:END:
+#+title: %^{Concept Title}
+#+filetags: :project/sagebrush:concept:analysis:
+
+* Definition
+%^{Definition of the concept}
+
+* Historical Context
+#+BEGIN_COMMENT
+- When/where did this concept emerge?
+- How was it used by historical actors?
+- How have historians defined it?
+#+END_COMMENT
+%?
+
+* Related Research Notes
+
+* Related Sources
+
+* Historiographical Connections
+
+* Connections
+#+BEGIN_COMMENT
+Related people, events, concepts
+#+END_COMMENT
+
+* Implications for Narrative
+#+BEGIN_COMMENT
+- How does this concept help explain historical change?
+- Where might it appear in the book?
+#+END_COMMENT
+
+* Remaining Questions"
+      :target (file+head "sagebrush/03-analysis/%<%Y%m%d%H%M%S>-${slug}.org" "")
+      :unnarrowed t)
+
+     ;; HISTORIOGRAPHICAL NOTE
+     ("h" "Historiography Note" plain
+      ":PROPERTIES:
+:TYPE:     historiography
+:DATE:     %<%Y-%m-%d>
+:TOPICS:   %^{Historiographical Topics}
+:END:
+#+title: %^{Historiographical Theme}
+#+filetags: :project/sagebrush:historiography:analysis:
+
+* Topic Summary
+%^{One-sentence summary of the debate}
+
+* Key Works
+
+* Trends in the Debate
+- Early interpretations:
+- Revisionist challenges:
+- Recent syntheses:
+- Unresolved questions:
+
+* Connections to Research
+
+* Evidence
+#+BEGIN_COMMENT
+- Supporting primary sources
+- Key secondary works
+#+END_COMMENT
+
+* Relevance to Narrative
+#+BEGIN_COMMENT
+- Where/why does this debate matter for your story?
+- Which chapter(s) does it inform?
+#+END_COMMENT
+
+* Remaining Questions/Next Steps"
+      :target (file+head "sagebrush/03-analysis/%<%Y%m%d%H%M%S>-${slug}.org" "")
+      :unnarrowed t)
+
+     ;; PEOPLE
+     ("p" "Person" plain
+        "%?"
+        :target (file+head "sagebrush/01-notes/%<%Y%m%d%H%M%S>-${slug}.org"
+                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:person:biography:\n:PROPERTIES:\n:TYPE: person\n:NAME: \n:BIRTH_DATE: \n:DEATH_DATE: \n:OCCUPATIONS: \n:STATES_LIVED: \n:FAITH: \n:THEMES: \n:END:\n\n* Biography\n\n\n* Connections\n\n\n* Key Events\n\n\n* Relevant Documents\n\n\n* Notes\n\n")
+        :unnarrowed t)
+
+     ;; SYNTHESIS
+     ("y" "Synthesis/Bridge Note" plain
+        "%?"
+        :target (file+head "sagebrush/03-analysis/%<%Y%m%d%H%M%S>-${slug}.org"
+                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:bridge:synthesis:\n:PROPERTIES:\n:TYPE: synthesis\n:DATE: %U\n:END:\n\n* Topic Summary\n\n\n* Argument\n\n\n* Evidence\n\n\n* Connections\n\n\n* Remaining Questions/Next Steps\n\n")
+        :unnarrowed t))
+   )
+  :config
+  ;; Sync my Org Roam database automatically
+  (org-roam-db-autosync-enable)
+  (org-roam-db-autosync-mode)
+  ;; Open Org files in same window
+  (add-to-list 'org-link-frame-setup '(file . find-file)))
+
+(use-package consult-org-roam
+   :ensure t
+   :after org-roam
+   :init
+   (require 'consult-org-roam)
+   ;; Activate the minor mode
+   (consult-org-roam-mode 1)
+   :custom
+   ;; Use `ripgrep' for searching with `consult-org-roam-search'
+   (consult-org-roam-grep-func #'consult-ripgrep)
+   ;; Configure a custom narrow key for `consult-buffer'
+   (consult-org-roam-buffer-narrow-key ?r)
+   ;; Display org-roam buffers right after non-org-roam buffers
+   ;; in consult-buffer (and not down at the bottom)
+   (consult-org-roam-buffer-after-buffers t)
+   :config
+   ;; Eventually suppress previewing for certain functions
+   (consult-customize
+    consult-org-roam-forward-links
+    :preview-key "M-.")
+)
+
+(setq org-roam-node-display-template
+      (concat "${title:*} "
+        (propertize "${tags:10}" 'face 'org-tag)))
+
+(use-package org-roam-ui
+    :after org-roam
+    :config
+    (setq org-roam-ui-sync-theme t
+          org-roam-ui-follow t
+          org-roam-ui-update-on-save t
+          org-roam-ui-open-on-start t))
+
+;; org conveniences 
+(use-package org-download
+  :after org
   :bind
-  (("C-c w r" . recentf-open)))
+  (:map org-mode-map
+        (("s-t" . org-download-screenshot)
+         ("s-y" . org-download-clipboard))))
 
-;; Bookmarks
+;; org-transclusion
+(use-package org-transclusion
+  :after org)
+(define-key global-map (kbd "C-c t a") #'org-transclusion-add)
+(define-key global-map (kbd "C-c t m") #'org-transclusion-mode)
 
-(use-package bookmark
-  :custom
-  (bookmark-save-flag 1)
-  :bind
-  ("C-x r d" . bookmark-delete))
+(use-package toc-org
+  :after org
+  :config
+  (add-hook 'org-mode-hook 'toc-org-mode)
 
-;; Work with Obsidian 
+  ;; enable in markdown, too
+  (add-hook 'markdown-mode-hook 'toc-org-mode))
 
-;; (require 'obsidian)
-;; ;; Location of obsidian vault
-;; (setopt obsidian-directory "/Users/jheppler/research/Research")
-;; ;; Default location for new notes from `obsidian-capture'
-;; (setopt obsidian-inbox-directory "00. Inbox")
-;; ;; Useful if you're going to be using wiki links
-;; (setopt markdown-enable-wiki-links t)
+;; Citar to access bibliographies
+(use-package citar
+   :custom
+   (citar-bibliography '("~/Documents/Academia/library.bib"))
+   (citar-notes-paths '("~/Documents/notes/"))
+   (citar-open-always-create-notes t)
+   (org-cite-insert-processor 'citar)
+   (org-cite-follow-processor 'citar)
+   (org-cite-activate-processor 'citar)
+   :bind (:map org-mode-map
+          ("C-c w b k" . org-cite-insert)))
+
+;; org-roam-bibtex
+(use-package org-roam-bibtex
+  :after (org-roam citar)
+  :config (org-roam-bibtex-mode 1))
+
+;; Programming 
+(use-package evil-nerd-commenter
+  :defer t
+  :bind (:map custom-bindings-map ("C-0" . evilnc-comment-or-uncomment-lines)))
+
+(add-hook 'prog-mode-hook 'subword-mode)
+
+(electric-pair-mode 1)
+
+(use-package hl-todo
+    :hook (prog-mode . hl-todo-mode)
+    :config
+    (setq hl-todo-highlight-punctuation ":"
+          hl-todo-keyword-faces
+          `(("TODO"       font-lock-keyword-face  bold)
+            ("FIXME"      error                   bold)
+            ("HACK"       font-lock-constant-face bold)
+            ("REVIEW"     font-lock-keyword-face  bold)
+            ("NOTE"       success                 bold)
+            ("DEPRECATED" font-lock-doc-face      bold))))
+
+(use-package markdown-mode
+  :defer t)
+
+;; Flycheck 
+(use-package flycheck
+  :defer t
+  :init (global-flycheck-mode)
+  :bind (:map flycheck-mode-map
+              ("C-c ! !" . flycheck-explain-error-at-point))
+  :config (setq flycheck-display-errors-function #'ignore))
+
+;; Code formatting 
+(use-package apheleia
+  :defer t
+  :defines
+  apheleia-formatters
+  apheleia-mode-alist
+  :functions
+  apheleia-global-mode
+  :hook ((typescript-mode    . apheleia-mode)
+         (javascript-mode    . apheleia-mode)
+         (typescript-ts-mode . apheleia-mode)
+         (tide-mode          . apheleia-mode))
+  :config
+  (setf (alist-get 'prettier-json apheleia-formatters)
+        '("prettier" "--stdin-filepath" filepath))
+  ;; (apheleia-global-mode +1)
+)
+
+;; Eldoc 
+(use-package eldoc
+  :defer t
+  :config
+  (global-eldoc-mode))
+
+;; xref 
+(use-package consult-xref-stack
+  :vc
+  (:url "https://github.com/brett-lempereur/consult-xref-stack" :branch "main")
+  :bind (:map custom-bindings-map
+              ("C-," . consult-xref-stack-backward)
+              ("C-." . consult-xref-stack-forward)))
+
+;; http requests
+(use-package verb
+  :after org
+  :config
+  (define-key org-mode-map (kbd "C-c C-r") verb-command-map))
+
+;; tree-sitter 
+;; (use-package treesit
+;;   :ensure nil
+;;   :mode (("\\.mjs\\'" . typescript-ts-mode)
+;;          ("\\.mts\\'" . typescript-ts-mode)
+;;          ("\\.cjs\\'" . typescript-ts-mode)
+;;          ("\\.json\\'" .  json-ts-mode)
+;;          ("\\.Dockerfile\\'" . dockerfile-ts-mode)
+;;          ("\\.prisma\\'" . prisma-ts-mode))
+;;   :preface
+;;   (defun os/setup-install-grammars ()
+;;     "Install Tree-sitter grammars if they are absent."
+;;     (interactive)
+;;     (dolist (grammar
+;;              '((css . ("https://github.com/tree-sitter/tree-sitter-css" "v0.20.0"))
+;;                (bash "https://github.com/tree-sitter/tree-sitter-bash")
+;;                (html . ("https://github.com/tree-sitter/tree-sitter-html" "v0.20.1"))
+;;                (javascript . ("https://github.com/tree-sitter/tree-sitter-javascript" "v0.21.2" "src"))
+;;                (json . ("https://github.com/tree-sitter/tree-sitter-json" "v0.20.2"))
+;;                (python . ("https://github.com/tree-sitter/tree-sitter-python" "v0.20.4"))
+;;                (go "https://github.com/tree-sitter/tree-sitter-go" "v0.20.0")
+;;                (markdown "https://github.com/ikatyang/tree-sitter-markdown")
+;;                (make "https://github.com/alemuller/tree-sitter-make")
+;;                (elisp "https://github.com/Wilfred/tree-sitter-elisp")
+;;                (cmake "https://github.com/uyha/tree-sitter-cmake")
+;;                (c "https://github.com/tree-sitter/tree-sitter-c")
+;;                (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
+;;                (toml "https://github.com/tree-sitter/tree-sitter-toml")
+;;                (tsx . ("https://github.com/tree-sitter/tree-sitter-typescript" "v0.20.3" "tsx/src"))
+;;                (typescript . ("https://github.com/tree-sitter/tree-sitter-typescript" "v0.20.3" "typescript/src"))
+;;                (yaml . ("https://github.com/ikatyang/tree-sitter-yaml" "v0.5.0"))
+;;                (prisma "https://github.com/victorhqc/tree-sitter-prisma")))
+;;       (add-to-list 'treesit-language-source-alist grammar)
+;;       ;; Only install `grammar' if we don't already have it
+;;       ;; installed. However, if you want to *update* a grammar then
+;;       ;; this obviously prevents that from happening.
+;;       (unless (treesit-language-available-p (car grammar))
+;;         (treesit-install-language-grammar (car grammar)))))
 ;;
-;; ;; Create note
-;; (define-key obsidian-mode-map (kbd "C-c C-n") 'obsidian-capture)
-;; ;; If you prefer you can use `obsidian-insert-wikilink'
-;; (define-key obsidian-mode-map (kbd "C-c C-l") 'obsidian-insert-link)
-;; ;; Open file pointed to by link at point
-;; (define-key obsidian-mode-map (kbd "C-c C-o") 'obsidian-follow-link-at-point)
-;; ;; Open a note from vault
-;; (define-key obsidian-mode-map (kbd "C-c C-p") 'obsidian-jump)
-;; ;; Follow a backlink for the current file
-;; (define-key obsidian-mode-map (kbd "C-c C-b") 'obsidian-backlink-jump)
-;;
-;; ;; Activate obsidian mode and backlinks mode
-;; (global-obsidian-mode t)
-;; (obsidian-backlinks-mode t)
+;;   ;; Optional, but recommended. Tree-sitter enabled major modes are
+;;   ;; distinct from their ordinary counterparts.
+;;   ;;
+;;   ;; You can remap major modes with `major-mode-remap-alist'. Note
+;;   ;; that this does *not* extend to hooks! Make sure you migrate them
+;;   ;; also
+;;   (dolist (mapping
+;;            '((Css-mode . css-ts-mode)
+;;              (typescript-mode . typescript-ts-mode)
+;;              (js-mode . typescript-ts-mode)
+;;              (js2-mode . typescript-ts-mode)
+;;              (css-mode . css-ts-mode)
+;;              (json-mode . json-ts-mode)
+;;              (js-json-mode . json-ts-mode)))
+;;     (add-to-list 'major-mode-remap-alist mapping))
+;;   :config
+;;   (os/setup-install-grammars))
 
-;; Custom key commands
+;; Strucutral editing 
+(use-package paredit
+  :defer t
+  :commands
+  paredit-forward
+  paredit-backward
+  paredit-forward-up
+  paredit-forward-down
+  paredit-backward-up
+  paredit-backward-down)
 
-;; Mimic vim's join line
-(fset 'jah/join-lines
-      (lambda (&optional arg) "Keyboard macro." (interactive "p")
-        (kmacro-exec-ring-item (quote ([14 1 backspace 32 2] 0 "%d")) arg)))
+(use-package lispy
+  :after paredit
+  :hook (lispy-mode . (lambda () (electric-pair-local-mode -1)))
+  :config
+  (setcdr lispy-mode-map nil)
+  :bind (:map lispy-mode-map
 
-(global-set-key (kbd "C-c j") 'jah/join-lines)
+         ;; Basic editing
+         ("("  . lispy-parens)
+         (")"  . lispy-right-nostring)
+         ("["  . lispy-brackets)
+         ("]"  . lispy-close-square)
+         ("{"  . lispy-braces)
+         ("}"  . lispy-close-curly)
+         (";"  . lispy-comment)
+         ("\"" . paredit-doublequote)
+
+         ;; Slurping & barfing
+         ("C-<right>"   . paredit-forward-slurp-sexp)
+         ("C-<left>"    . paredit-forward-barf-sexp)
+         ("C-<right>"   . paredit-forward-slurp-sexp)
+         ("C-<left>"    . paredit-forward-barf-sexp)
+
+         ;; LISP-friendly Emacs commands
+         ("C-k"        . lispy-kill)
+         ("DEL"        . paredit-backward-delete)
+
+         ;; Navigating sexpressions
+         ("C-f"   . paredit-forward)
+         ("C-b"   . paredit-backward)
+         ("C-M-f" . paredit-forward-up)
+         ("C-M-b" . paredit-backward-up)
+
+         ("C-M-n" . paredit-forward-down)
+         ("C-M-p" . paredit-backward-down)
+         ("C-M-d" . paredit-forward-down)
+         ("C-M-u" . paredit-backward-up)
+
+         ("M-a"   . lispy-beginning-of-defun)
+         ("M-d"   . lispy-different) ; Toggle between beginning and start of sexp
+
+         ;; Moving sexpressions
+         ("C-M-<up>"   . lispy-move-up)
+         ("C-M-<down>" . lispy-move-down)
+         ("M-c"        . lispy-clone)
+
+         ;; Manipulating sexpressions
+         ("M-<up>"   . lispy-splice-sexp-killing-backward)
+         ("M-<down>" . lispy-splice-sexp-killing-forward)
+         ("M-s"      . lispy-splice)
+         ("M-r"      . lispy-raise-sexp)
+         ("M-S"      . lispy-split)
+         ("M-J"      . lispy-join)
+         ("M-?"      . lispy-convolute)
+
+         ;; Misc.
+         ("M-\"" . lispy-meta-doublequote)
+         ("M-)"  . lispy-close-round-and-newline)
+         ("M-("  . lispy-wrap-round)))
+
+;; Combobulate
+(use-package combobulate
+  :vc (:url "https://github.com/mickeynp/combobulate"
+            :rev :newest
+            :branch "main")
+  :custom (combobulate-key-prefix "C-c o")
+  :bind (:map combobulate-key-map
+              ("M-a" . combobulate-navigate-beginning-of-defun)
+              ("M-e" . combobulate-navigate-end-of-defun)))
+
+;; LSP 
+(use-package lsp-mode
+  :defer t
+  :init (setq lsp-use-plists t)
+  :hook ((lsp-mode              . lsp-enable-which-key-integration)
+         (typescript-mode       . lsp)
+         (tsx-ts-mode           . lsp)
+         (typescript-ts-mode    . lsp)
+         (web-mode              . lsp))
+  :bind (:map lsp-mode-map
+              ("M-<return>" . lsp-execute-code-action)
+              ("C-M-."      . lsp-find-references)
+              ("C-c r"      . lsp-rename))
+  :config
+  (setq lsp-diagnostics-provider :flycheck
+        lsp-completion-provider  :none)       ;; I use corfu
+  ;; Disable visual features
+  (setq lsp-headerline-breadcrumb-enable nil  ;; No breadcrumbs
+        lsp-lens-enable                  nil  ;; No lenses
+
+        ;; Enable code actions in the mode line
+        lsp-modeline-code-actions-enable t
+        lsp-modeline-code-action-fallback-icon "✦"
+
+        ;; Limit raising of the echo area to show docs
+        lsp-signature-doc-lines 3)
+  (setq lsp-file-watch-threshold  1500)
+  (setq lsp-format-buffer-on-save nil)
+
+  (with-eval-after-load 'lsp-modeline
+    (set-face-attribute 'lsp-modeline-code-actions-preferred-face nil
+                        :inherit font-lock-comment-face)
+    (set-face-attribute 'lsp-modeline-code-actions-face nil
+                        :inherit font-lock-comment-face)))
+
+(use-package lsp-ui
+  :after lsp-mode
+  :config
+  (setq lsp-ui-sideline-enable nil
+        lsp-ui-doc-enable      nil))
+
+(use-package origami
+  :defer t
+  :hook (prog-mode . origami-mode)
+  :bind (:map origami-mode-map
+              ("C-<" . origami-toggle-node)))
+
+(use-package lsp-origami
+  :after lsp
+  :hook (lsp-mode . lsp-origami-try-enable))
+
+(defun lsp-booster--advice-json-parse (old-fn &rest args)
+  "Try to parse bytecode instead of json."
+  (or
+   (when (equal (following-char) ?#)
+     (let ((bytecode (read (current-buffer))))
+       (when (byte-code-function-p bytecode)
+         (funcall bytecode))))
+   (apply old-fn args)))
+(advice-add (if (progn (require 'json)
+                       (fboundp 'json-parse-buffer))
+                'json-parse-buffer
+              'json-read)
+            :around
+            #'lsp-booster--advice-json-parse)
+
+(defun lsp-booster--advice-final-command (old-fn cmd &optional test?)
+  "Prepend emacs-lsp-booster command to lsp CMD."
+  (let ((orig-result (funcall old-fn cmd test?)))
+    (if (and (not test?)                             ;; for check lsp-server-present?
+             (not (file-remote-p default-directory)) ;; see lsp-resolve-final-command, it would add extra shell wrapper
+             lsp-use-plists
+             (not (functionp 'json-rpc-connection))  ;; native json-rpc
+             (executable-find "emacs-lsp-booster"))
+        (progn
+          (when-let* ((command-from-exec-path (executable-find (car orig-result))))  ;; resolve command from exec-path (in case not found in $PATH)
+            (setcar orig-result command-from-exec-path))
+          (message "Using emacs-lsp-booster for %s!" orig-result)
+          (cons "emacs-lsp-booster" orig-result))
+      orig-result)))
+(advice-add 'lsp-resolve-final-command :around #'lsp-booster--advice-final-command)
+
+;; Languages 
+(use-package clojure-mode
+  :defer t
+  :bind (:map clojure-mode-map
+              ("C-("     . clojure-convert-collection-to-list)
+              ("C-'"     . clojure-convert-collection-to-quoted-list)
+              ("<C-lsb>" . clojure-convert-collection-to-vector)
+              ("C-{"     . clojure-convert-collection-to-map)
+              ("C-#"     . clojure-convert-collection-to-set))
+  :config
+  (require 'flycheck-clj-kondo))
+
+(defun jah/cider-eval-and-test-ns ()
+  "Evaluate the current namespace, then run all tests associated with it."
+  (interactive)
+  (cider-eval-buffer)
+  ;; Get the current namespace
+  (let ((ns (cider-current-ns)))
+    (when ns
+      (cider-test-run-ns-tests ns))))
+
+(use-package cider
+  :defer t
+  :hook ((cider-mode      . lispy-mode)
+         (cider-repl-mode . lispy-mode)
+         (clojure-mode    . lispy-mode)
+         (clojure-mode    . whitespace-mode))
+  :bind (:map cider-repl-mode-map
+              ("C-l"   . cider-repl-clear-buffer))
+  :bind (:map cider-mode-map
+              ("C-c s" . cider-selector)
+              ("C-c t" . jah/cider-eval-and-test-ns))
+  :config
+  (setq cider-repl-display-help-banner       nil
+        clojure-toplevel-inside-comment-form t
+        cider-download-java-sources          t)
+  ; (def-cider-selector-method ?e
+  ;   "CIDER result buffer."
+  ;   cider-result-buffer)
+  )
+
+(use-package flycheck-clj-kondo
+  :ensure t)
+
+(use-package anakondo
+  :ensure t
+  :commands anakondo-minor-mode)
+
+(use-package clj-refactor
+  :after clojure-mode
+  :hook (clojure-mode . clj-refactor-mode)
+  :bind (:map cider-mode-map
+              ("C-M-c" . cljr-clean-ns))
+  :config
+  (setq cljr-add-ns-to-blank-clj-files nil)
+  (cljr-add-keybindings-with-prefix "C-<return>"))
+
+(use-package eval-sexp-fu
+  :after cider)
+
+(use-package cider-eval-sexp-fu
+  :after cider)
+
+(defun cider-jack-in-with-profile ()
+  (interactive)
+  (letrec ((profile (read-string "Enter profile names (,separated): "))
+           (lein-params (concat "with-profile +" profile " repl :headless")))
+    (message "lein-params set to: %s" lein-params)
+    (set-variable 'cider-lein-parameters lein-params)
+    (cider-jack-in '())))
+
+(defun cider-jack-in-with-portal-profile ()
+  (interactive)
+  (set-variable 'cider-lein-parameters "with-profile +portal repl :headless")
+  (cider-jack-in '()))
+
+(use-package dash
+  :defer t)
+
+(use-package s
+  :defer t)
+
+(use-package f
+  :defer t)
+
+(use-package eros
+  :defer t
+  :functions
+  eros-mode
+  eros-eval-defun
+  :bind (:map emacs-lisp-mode-map
+              ("C-c C-c" . eros-eval-defun)
+              ("C-c C-k" . eval-buffer))
+  :config
+  (eros-mode 1))
+
+(use-package python
+  :interpreter ("python3" . python-mode)
+  :defer t
+  :config
+  (setq python-shell-interpreter "python3.11")
+  (add-hook 'python-mode
+			 (lambda () (setq forward-sexp-function nil))))
+
+(use-package hide-mode-line
+  :defer t
+  :hook (inferior-python-mode . hide-mode-line-mode))
+
+(use-package nix-mode
+  :defer t)
+
+(use-package typescript-mode
+  :defer t
+  :mode (("\\.js\\'"   . typescript-mode)
+         ("\\.ts\\'"   . typescript-mode)
+         ("\\.jsx\\'"  . tsx-ts-mode)
+         ("\\.tsx\\'"  . tsx-ts-mode))
+  :hook ((typescript-mode . combobulate-mode)
+         (tsx-ts-mode     . combobulate-mode))
+  :config
+  (setq typescript-indent-level 2))
+
+(use-package rjsx-mode
+  :defer t
+  :mode "components\\/.*\\.js\\'")
+
+(use-package js2-mode
+  :mode "\\.js\\'"
+  :interpreter "node"
+  :config
+  (setq js2-basic-offset 2))
+
+(use-package xref-js2
+  :after js2-mode
+  :config
+  (define-key js2-mode-map (kbd "M-.") nil)
+  (add-hook 'js2-mode-hook
+            (lambda () (add-hook 'xref-backend-functions #'xref-js2-xref-backend nil t)))
+  (setq xref-js2-search-program 'rg)
+  (define-key js2-mode-map (kbd "M-.") 'xref-find-definitions)
+  (define-key js2-mode-map (kbd "M-,") 'xref-pop-marker-stack))
+
+;; Custom keybinds 
+(define-key custom-bindings-map (kbd "M-o") 'other-window)
+
+(define-key custom-bindings-map (kbd "C-c b") 'ibuffer)
+
+(define-key custom-bindings-map (kbd "C-f") 'forward-sexp)
+(define-key custom-bindings-map (kbd "C-b") 'backward-sexp)
+
+(define-key custom-bindings-map (kbd "C-c u") 'revert-buffer)
+
+;; Writing workflow keybindings under C-c w
+(define-key custom-bindings-map (kbd "C-c w d f") 'consult-org-roam-file-find)
+(define-key custom-bindings-map (kbd "C-c w d s") 'consult-org-roam-search)
+(define-key custom-bindings-map (kbd "C-c w d b") 'consult-org-roam-backlinks)
+(define-key custom-bindings-map (kbd "C-c w d l") 'consult-org-roam-forward-links)
+(define-key custom-bindings-map (kbd "C-c w d t") 'org-roam-buffer-toggle)
+
+;; Citar bibliography keybindings
+(define-key custom-bindings-map (kbd "C-c w b c") 'citar-create-note)
+(define-key custom-bindings-map (kbd "C-c w b n") 'citar-open-notes)
+(define-key custom-bindings-map (kbd "C-c w b x") 'citar-insert-citation)
+(define-key custom-bindings-map (kbd "C-c w b d") 'citar-dwim)
+(define-key custom-bindings-map (kbd "C-c w b e") 'citar-open)
+
+;; Org roam node operations
+(define-key custom-bindings-map (kbd "C-c w n f") 'org-roam-node-find)
+(define-key custom-bindings-map (kbd "C-c w n i") 'org-roam-node-insert)
+(define-key custom-bindings-map (kbd "C-c w n t") 'org-roam-tag-add)

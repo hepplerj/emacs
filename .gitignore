@@ -5,21 +5,15 @@
 /elfeed/
 /eln-cache/
 /elpa/
-/emms/
 /history
 /recentf
 /auto-save-list/
-/documents/ews-book/ltximg/
-/documents/ews-book/reviews/
 /images/
 /transient/
 /games/
-/documents/ews-book/*.pdf
 backups.bak/
-backups.bak/!home!peter!documents!notes!19960801T095403--oracles__divination_esoterica.org.~1~
 /image-dired/
 /ltximg/
-/ews-hugo.el
 /bookmarks
 /abbrev_defs
 /url/
@@ -28,11 +22,23 @@ backups.bak/!home!peter!documents!notes!19960801T095403--oracles__divination_eso
 /nov-places
 /tramp
 /tutorial/
-/documents/book/00-emacs-writing-studio.epub
-/documents/book/00-emacs-writing-studio.pdf
 /reviews/
 /documents/book/ltximg/
 /config/
 /documents/book/.dir-locals.el
 .org-id-locations
 org-roam.db
+
+/autosaves/
+/places
+/projectile-bookmarks.eld
+/projects.eld
+/elgrep-data.el
+/tree-sitter/
+/local-lisp/
+# using org-roam-dblocks in /nursery/ 
+# via https://github.com/chrisbarrett/nursery/tree/main
+/nursery/ 
+
+# Temporary backup files
+%backup%~
