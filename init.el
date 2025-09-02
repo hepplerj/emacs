@@ -211,10 +211,10 @@
 (add-hook 'prog-mode 'whitespace-mode)
 
 ;; Fonts 
-(defvar jah/font-height 110)
+(defvar jah/font-height 115)
 
 (when (eq system-type 'darwin)
-  (setq jah/font-height 110))
+  (setq jah/font-height 115))
 
 (when (member "Fragment Mono" (font-family-list))
   (set-face-attribute 'default nil :font "Fragment Mono" :height jah/font-height)
@@ -371,7 +371,11 @@
 (use-package olivetti
   :defer t
   :config
-  (setq olivetti-style t))
+  (setq olivetti-style t)
+  :hook (olivetti-mode . (lambda () 
+                           (if olivetti-mode
+                               (text-scale-set 2)
+                             (text-scale-set 0)))))
 
 (use-package adaptive-wrap
   :defer t
@@ -570,7 +574,7 @@
   :custom
   (undo-tree-auto-save-history nil)
   :bind
-  (("C-c w u" . undo-tree-visualise)))
+  (("C-c w u" . undo-tree-visualize)))
 
 (use-package move-dup
   :bind (:map custom-bindings-map
@@ -682,8 +686,27 @@ When called without a prefix argument, kill just the current buffer
   :config
   (add-to-list 'projectile-project-search-path "~/Dropbox/projects/")
   (add-to-list 'projectile-project-search-path "~/Dropbox/playground/")
+  (add-to-list 'projectile-project-search-path "~/Documents/writing/")
   :init
   (projectile-mode))
+
+;; File explorer sidebar
+(use-package treemacs
+  :defer t
+  :bind (:map custom-bindings-map
+              ("M-0"       . treemacs-select-window)
+              ("C-x t 1"   . treemacs-delete-other-windows)
+              ("C-x t t"   . treemacs)
+              ("C-x t B"   . treemacs-bookmark)
+              ("C-x t C-t" . treemacs-find-file)
+              ("C-x t M-t" . treemacs-find-tag))
+  :config
+  (setq treemacs-width 30
+        treemacs-follow-mode t
+        treemacs-filewatch-mode t))
+
+(use-package treemacs-projectile
+  :after (treemacs projectile))
 
 (setq ibuffer-saved-filter-groups
       '(("default"
@@ -778,7 +801,8 @@ When called without a prefix argument, kill just the current buffer
   (corfu-cycle         t)
   (corfu-quit-no-match 'separator)
   :init
-  (global-corfu-mode))
+  (global-corfu-mode)
+  :hook (org-mode . (lambda () (corfu-mode -1))))
 
 (setq tab-always-indent 'complete)
 
@@ -834,6 +858,46 @@ When called without a prefix argument, kill just the current buffer
 (use-package marginalia
   :init 
   (marginalia-mode 1))
+
+;; embark
+(use-package embark
+  :ensure t
+
+  :bind
+  (("C-." . embark-act)         ;; pick some comfortable binding
+   ("C-;" . embark-dwim)        ;; good alternative: M-.
+   ("C-h B" . embark-bindings)) ;; alternative for `describe-bindings'
+
+  :init
+
+  ;; Optionally replace the key help with a completing-read interface
+  (setq prefix-help-command #'embark-prefix-help-command)
+
+  ;; Show the Embark target at point via Eldoc. You may adjust the
+  ;; Eldoc strategy, if you want to see the documentation from
+  ;; multiple providers. Beware that using this can be a little
+  ;; jarring since the message shown in the minibuffer can be more
+  ;; than one line, causing the modeline to move up and down:
+
+  ;; (add-hook 'eldoc-documentation-functions #'embark-eldoc-first-target)
+  ;; (setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
+
+  ;; Add Embark to the mouse context menu. Also enable `context-menu-mode'.
+  ;; (context-menu-mode 1)
+  ;; (add-hook 'context-menu-functions #'embark-context-menu 100)
+
+  :config
+
+  ;; Hide the mode line of the Embark live/completions buffers
+  (add-to-list 'display-buffer-alist
+               '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+                 nil
+                 (window-parameters (mode-line-format . none)))))
+
+(use-package embark-consult
+  :ensure t ; only need to install it, embark loads it after consult if found
+  :hook
+  (embark-collect-mode . consult-preview-at-point-mode))
 
 ;; Misc 
 (use-package diff-hl
@@ -1063,150 +1127,94 @@ When called without a prefix argument, kill just the current buffer
                                           ("DONE"     . 9745)))
   :hook (org-mode . org-superstar-mode))
 
-(use-package svg-tag-mode
-  :after org
-  :config
-  (defconst date-re "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}")
-  (defconst time-re "[0-9]\\{2\\}:[0-9]\\{2\\}")
-  (defconst day-re "[A-Za-z]\\{3\\}")
-  (defconst day-time-re (format "\\(%s\\)? ?\\(%s\\)?" day-re time-re))
+;; (use-package svg-tag-mode
+;;   :after org
+;;   :config
+;;   (defconst date-re "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}")
+;;   (defconst time-re "[0-9]\\{2\\}:[0-9]\\{2\\}")
+;;   (defconst day-re "[A-Za-z]\\{3\\}")
+;;   (defconst day-time-re (format "\\(%s\\)? ?\\(%s\\)?" day-re time-re))
 
-  (defun svg-progress-percent (value)
-	(svg-image (svg-lib-concat
-				(svg-lib-progress-bar (/ (string-to-number value) 100.0)
-			      nil :margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
-				(svg-lib-tag (concat value "%")
-				  nil :stroke 0 :margin 0)) :ascent 'center))
+;;   (defun svg-progress-percent (value)
+;; 	(svg-image (svg-lib-concat
+;; 				(svg-lib-progress-bar (/ (string-to-number value) 100.0)
+;; 			      nil :margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
+;; 				(svg-lib-tag (concat value "%")
+;; 				  nil :stroke 0 :margin 0)) :ascent 'center))
 
-  (defun svg-progress-count (value)
-	(let* ((seq (mapcar #'string-to-number (split-string value "/")))
-           (count (float (car seq)))
-           (total (float (cadr seq))))
-	  (svg-image (svg-lib-concat
-				  (svg-lib-progress-bar (/ count total) nil
-					:margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
-				  (svg-lib-tag value nil
-					:stroke 0 :margin 0)) :ascent 'center)))
-  (setq svg-tag-tags
-      `(;; Org tags
-        ;; (":\\([A-Za-z0-9]+\\)" . ((lambda (tag) (svg-tag-make tag))))
-        ;; (":\\([A-Za-z0-9]+[ \-]\\)" . ((lambda (tag) tag)))
-        
-        ;; Task priority
-        ("\\[#[A-Z]\\]" . ( (lambda (tag)
-                              (svg-tag-make tag :face 'org-priority 
-                                            :beg 2 :end -1 :margin 0))))
+;;   (defun svg-progress-count (value)
+;; 	(let* ((seq (mapcar #'string-to-number (split-string value "/")))
+;;            (count (float (car seq)))
+;;            (total (float (cadr seq))))
+;; 	  (svg-image (svg-lib-concat
+;; 				  (svg-lib-progress-bar (/ count total) nil
+;; 					:margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
+;; 				  (svg-lib-tag value nil
+;; 					:stroke 0 :margin 0)) :ascent 'center)))
+;;   (setq svg-tag-tags
+;;       `(;; Org tags
+;;         ;; (":\\([A-Za-z0-9]+\\)" . ((lambda (tag) (svg-tag-make tag))))
+;;         ;; (":\\([A-Za-z0-9]+[ \-]\\)" . ((lambda (tag) tag)))
+;;         
+;;         ;; Task priority
+;;         ("\\[#[A-Z]\\]" . ( (lambda (tag)
+;;                               (svg-tag-make tag :face 'org-priority 
+;;                                             :beg 2 :end -1 :margin 0))))
 
-        ;; Progress
-        ("\\(\\[[0-9]\\{1,3\\}%\\]\\)" . ((lambda (tag)
-          (svg-progress-percent (substring tag 1 -2)))))
-        ("\\(\\[[0-9]+/[0-9]+\\]\\)" . ((lambda (tag)
-          (svg-progress-count (substring tag 1 -1)))))
-        
-        ;; TODO / DONE
-        ;; ("TODO" . ((lambda (tag) (svg-tag-make "TODO" :face 'org-todo
-		;; 									           :inverse t :margin 0))))
-        ;; ("DONE" . ((lambda (tag) (svg-tag-make "DONE" :face 'org-done :margin 0))))
+;;         ;; Progress
+;;         ("\\(\\[[0-9]\\{1,3\\}%\\]\\)" . ((lambda (tag)
+;;           (svg-progress-percent (substring tag 1 -2)))))
+;;         ("\\(\\[[0-9]+/[0-9]+\\]\\)" . ((lambda (tag)
+;;           (svg-progress-count (substring tag 1 -1)))))
+;;         
+;;         ;; TODO / DONE
+;;         ;; ("TODO" . ((lambda (tag) (svg-tag-make "TODO" :face 'org-todo
+;; 		;; 									           :inverse t :margin 0))))
+;;         ;; ("DONE" . ((lambda (tag) (svg-tag-make "DONE" :face 'org-done :margin 0))))
 
 
-        ;; Citation of the form [cite:@Knuth:1984] 
-        ("\\(\\[cite:@[A-Za-z]+:\\)" . ((lambda (tag)
-                                          (svg-tag-make tag
-                                                        :inverse t
-                                                        :beg 7 :end -1
-                                                        :crop-right t))))
-        ("\\[cite:@[A-Za-z]+:\\([0-9]+\\]\\)" . ((lambda (tag)
-                                                (svg-tag-make tag
-                                                              :end -1
-                                                              :crop-left t))))
+;;         ;; Citation of the form [cite:@Knuth:1984] 
+;;         ("\\(\\[cite:@[A-Za-z]+:\\)" . ((lambda (tag)
+;;                                           (svg-tag-make tag
+;;                                                         :inverse t
+;;                                                         :beg 7 :end -1
+;;                                                         :crop-right t))))
+;;         ("\\[cite:@[A-Za-z]+:\\([0-9]+\\]\\)" . ((lambda (tag)
+;;                                                 (svg-tag-make tag
+;;                                                               :end -1
+;;                                                               :crop-left t))))
 
-        
-        ;; Active date (with or without day name, with or without time)
-        (,(format "\\(<%s>\\)" date-re) .
-         ((lambda (tag)
-            (svg-tag-make tag :beg 1 :end -1 :margin 0))))
-        (,(format "\\(<%s \\)%s>" date-re day-time-re) .
-         ((lambda (tag)
-            (svg-tag-make tag :beg 1 :inverse nil :crop-right t :margin 0))))
-        (,(format "<%s \\(%s>\\)" date-re day-time-re) .
-         ((lambda (tag)
-            (svg-tag-make tag :end -1 :inverse t :crop-left t :margin 0))))
+;;         
+;;         ;; Active date (with or without day name, with or without time)
+;;         (,(format "\\(<%s>\\)" date-re) .
+;;          ((lambda (tag)
+;;             (svg-tag-make tag :beg 1 :end -1 :margin 0))))
+;;         (,(format "\\(<%s \\)%s>" date-re day-time-re) .
+;;          ((lambda (tag)
+;;             (svg-tag-make tag :beg 1 :inverse nil :crop-right t :margin 0))))
+;;         (,(format "<%s \\(%s>\\)" date-re day-time-re) .
+;;          ((lambda (tag)
+;;             (svg-tag-make tag :end -1 :inverse t :crop-left t :margin 0))))
 
-        ;; Inactive date  (with or without day name, with or without time)
-         (,(format "\\(\\[%s\\]\\)" date-re) .
-          ((lambda (tag)
-             (svg-tag-make tag :beg 1 :end -1 :margin 0 :face 'org-date))))
-         (,(format "\\(\\[%s \\)%s\\]" date-re day-time-re) .
-          ((lambda (tag)
-             (svg-tag-make tag :beg 1 :inverse nil :crop-right t :margin 0 :face 'org-date))))
-         (,(format "\\[%s \\(%s\\]\\)" date-re day-time-re) .
-          ((lambda (tag)
-             (svg-tag-make tag :end -1 :inverse t :crop-left t :margin 0 :face 'org-date)))))))
+;;         ;; Inactive date  (with or without day name, with or without time)
+;;          (,(format "\\(\\[%s\\]\\)" date-re) .
+;;           ((lambda (tag)
+;;              (svg-tag-make tag :beg 1 :end -1 :margin 0 :face 'org-date))))
+;;          (,(format "\\(\\[%s \\)%s\\]" date-re day-time-re) .
+;;           ((lambda (tag)
+;;              (svg-tag-make tag :beg 1 :inverse nil :crop-right t :margin 0 :face 'org-date))))
+;;          (,(format "\\[%s \\(%s\\]\\)" date-re day-time-re) .
+;;           ((lambda (tag)
+;;              (svg-tag-make tag :end -1 :inverse t :crop-left t :margin 0 :face 'org-date)))))))
 
-(add-hook 'org-mode-hook 'svg-tag-mode)
+;; (add-hook 'org-mode-hook 'svg-tag-mode)
 
-;; (defun jah/prettify-symbols-setup ()
-;;   "Beautify keywords"
-;;   (interactive)
-;;   (setq prettify-symbols-alist
-;; 		(mapcan (lambda (x)
-;;                   (when (and (consp x) (stringp (car x)))
-;;                     (list x (cons (upcase (car x)) (cdr x)))))
-;; 				'(; Greek symbols
-;; 				  ("lambda" . ?λ)
-;; 				  ("delta"  . ?Δ)
-;; 				  ("gamma"  . ?Γ)
-;; 				  ("phi"    . ?φ)
-;; 				  ("psi"    . ?ψ)
-;;                   ; Org headers
-;; 				  ("#+title:"  . ? )
-;; 				  ("#+author:" . ? )
-;;                   ("#+date:"   . ? )                
-;;                   ; Checkboxes
-;; 				  ("[ ]" . ?)
-;; 				  ("[X]" . ?)
-;; 				  ("[-]" . ?)
-;;                   ; Blocks
-;; 				  ("#+begin_src"   . ?) ; 
-;; 				  ("#+end_src"     . ?)
-;; 				  ("#+begin_QUOTE" . ?‟)
-;; 				  ("#+end_QUOTE"   . ?”)
-;;                   ; Drawers
-;; 				  (":properties:" . ?)
-;;                   ; Agenda scheduling
-;; 				  ("SCHEDULED:"   . ?🕘)
-;; 				  ("DEADLINE:"    . ?⏰)
-;;                   ; Agenda tags  
-;; 				  (":@projects:"  . ?☕)
-;; 				  (":work:"       . ?🚀)
-;; 				  (":@inbox:"     . ?✉)
-;; 				  (":goal:"       . ?🎯)
-;; 				  (":task:"       . ?📋)
-;; 				  (":@thesis:"    . ?📝)
-;; 				  (":thesis:"     . ?📝)
-;; 				  (":emacs:"      . ?)
-;; 				  (":learn:"      . ?🌱)
-;; 				  (":code:"       . ?💻)
-;; 				  (":fix:"        . ?🛠)
-;; 				  (":bug:"        . ?🚩)
-;; 				  (":read:"       . ?📚)
-;;                   ; Roam tags
-;; 				  ("#+filetags:"  . ?📎)
-;; 				  (":wip:"        . ?🏗)
-;; 				  (":ct:"         . ?➡)    ; Category Theory
-;;                   (":verb:"       . ?🌐) ; HTTP Requests in Org mode
-;;                   )))
-;;   (prettify-symbols-mode))
-;;
-;; (add-hook 'org-mode-hook        #'jah/prettify-symbols-setup)
-;; (add-hook 'org-agenda-mode-hook #'jah/prettify-symbols-setup)
-
-(add-to-list 'font-lock-extra-managed-props 'display)
-(font-lock-add-keywords 'org-mode
-                        `(("^.*?\\( \\)\\(:[[:alnum:]_@#%:]+:\\)$"
-                           (1 `(face nil
-                                     display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
-                              prepend))) t)
+;;(add-to-list 'font-lock-extra-managed-props 'display)
+;;(font-lock-add-keywords 'org-mode
+;;                        `(("^.*?\\( \\)\\(:[[:alnum:]_@#%:]+:\\)$"
+;;                           (1 `(face nil
+;;                                     display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
+;;                              prepend))) t)
 
 ;; General 
 (add-hook 'org-mode-hook #'(lambda () (electric-indent-local-mode -1)))
@@ -1383,6 +1391,28 @@ When called without a prefix argument, kill just the current buffer
   :config
   (setq org-babel-python-command python-shell-interpreter))
 
+;; TESTING: org-node
+(use-package org-mem
+  :defer
+  :config
+  (setq org-mem-do-sync-with-org-id t) ;; Optional
+  (setq org-mem-watch-dirs
+        (list "~/Documents/notes/")) ;; Your org-roam-directory here
+  (org-mem-updater-mode))
+
+(use-package org-node
+  :init
+  ;; Optional key bindings
+  (keymap-set global-map "M-o n" org-node-global-prefix-map)
+  (with-eval-after-load 'org
+    (keymap-set org-mode-map "M-o n" org-node-org-prefix-map))
+  :config
+  (org-node-cache-mode)
+  (org-node-roam-accelerator-mode)
+  (setq org-node-creation-fn #'org-node-new-via-roam-capture)
+  (setq org-node-file-slug-fn #'org-node-slugify-like-roam-default)
+  (setq org-node-file-timestamp-format "%Y%m%d%H%M%S-"))
+
 ;; Roam
 (use-package org-roam
   :after org
@@ -1401,55 +1431,51 @@ When called without a prefix argument, kill just the current buffer
      ;; PRIMARY SOURCES
      ("s" "Primary Source" plain
       ":PROPERTIES:
-:ROAM_REFS: cite:@%^{Bibtex Key}
-:TYPE:     primary-source
-:DATE:     %<%Y-%m-%d>
-:CREATOR:  %^{Author/Creator}
-:PUBLISHER: %^{Publisher/Archive}
-:DATE_CREATED: %^{Date Created}
-:ARCHIVE_NAME: %^{Archive/Collection}
-:COLLECTION: %^{Collection}
-:SERIES: %^{Series}
-:BOX: %^{Box}
-:FOLDER: %^{Folder}
-:CALL_NUMBER: %^{Call Number}
-:ITEM_NUMBER: %^{Item Number}
-:PEOPLE: %^{People Mentioned}
-:ORGANIZATIONS: %^{Organizations}
-:LOCATIONS: %^{Locations}
-:TOPICS: %^{Topics/Themes}
-:SOURCE_URL: %^{Source URL}
-:ARCHIVE_LOCATION: %^{Physical Archive Location}
+:DATE:     
+:CREATOR:  
+:PUBLISHER:
+:DATE_CREATED: %<%Y-%m-%d>
+:ARCHIVE:
+:COLLECTION: 
+:BOX: 
+:FOLDER:
+:PEOPLE: 
+:ORGANIZATIONS: 
+:LOCATIONS: 
+:TOPICS: 
+:TROPY:
 :END:
 #+title: %^{Source Title}
-#+filetags: :project/sagebrush:source:primary:
-
-* Source Type
-%^{Source Type|Manuscript|Letter|Photograph|Government Doc|Newspaper|Oral History|Interview|Report|Other}
+#+filetags: :project/sagebrush:source/primary:
 
 * Abstract / Overview
-%^{Brief summary of what this is (who, what, where, when)}
+#+BEGIN_COMMENT
+Brief summary of what this is (who, what, where, when)}
+#+END_COMMENT
+
 
 * Key Excerpts
 
-* Images
-
-* Transcription
 
 * Initial Observations
 #+BEGIN_COMMENT
-- What themes does this connect to? (link with [[id:xxx][concept notes]])
+- What themes does this connect to? (link with concept notes)
 - Who produced this? For what purpose?
 - What audience?
 - Relation to other sources?
 #+END_COMMENT
+
 
 * Links
 #+BEGIN_COMMENT
 Related people, places, links
 #+END_COMMENT
 
-* Notes"
+
+* Notes
+
+
+* Transcription"
       :target (file+head "sagebrush/04-sources/%<%Y%m%d%H%M%S>-${slug}.org" "")
       :unnarrowed t)
 
@@ -1460,7 +1486,7 @@ Related people, places, links
 :DATE:     %<%Y-%m-%d>
 :END:
 #+title: %^{Research Note Title}
-#+filetags: :project/sagebrush:research:analysis:
+#+filetags: :project/sagebrush:analysis:
 
 * Core Idea
 #+BEGIN_COMMENT
@@ -1503,7 +1529,7 @@ Related people, events, places
 :TOPICS:   %^{Main Topics/Themes}
 :END:
 #+title: %^{Concept Title}
-#+filetags: :project/sagebrush:concept:analysis:
+#+filetags: :project/sagebrush:concept:
 
 * Definition
 %^{Definition of the concept}
@@ -1545,7 +1571,7 @@ Related people, events, concepts
 :TOPICS:   %^{Historiographical Topics}
 :END:
 #+title: %^{Historiographical Theme}
-#+filetags: :project/sagebrush:historiography:analysis:
+#+filetags: :project/sagebrush:historiography:
 
 * Topic Summary
 %^{One-sentence summary of the debate}
@@ -1580,14 +1606,14 @@ Related people, events, concepts
      ("p" "Person" plain
         "%?"
         :target (file+head "sagebrush/01-notes/%<%Y%m%d%H%M%S>-${slug}.org"
-                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:person:biography:\n:PROPERTIES:\n:TYPE: person\n:NAME: \n:BIRTH_DATE: \n:DEATH_DATE: \n:OCCUPATIONS: \n:STATES_LIVED: \n:FAITH: \n:THEMES: \n:END:\n\n* Biography\n\n\n* Connections\n\n\n* Key Events\n\n\n* Relevant Documents\n\n\n* Notes\n\n")
+                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:biography:\n:PROPERTIES:\n:NAME: \n:ROAM_ALIASES: \n:BIRTH_DATE: \n:DEATH_DATE: \n:OCCUPATIONS: \n:LOCATIONS: \n:AFFILIATIONS: \n:FAITH: \n:THEMES: \n:END:\n\n* Biography\n\n\n* Connections\n\n\n* Key Events\n\n\n* Relevant Documents\n\n\n* Notes\n\n")
         :unnarrowed t)
 
      ;; SYNTHESIS
      ("y" "Synthesis/Bridge Note" plain
         "%?"
         :target (file+head "sagebrush/03-analysis/%<%Y%m%d%H%M%S>-${slug}.org"
-                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:bridge:synthesis:\n:PROPERTIES:\n:TYPE: synthesis\n:DATE: %U\n:END:\n\n* Topic Summary\n\n\n* Argument\n\n\n* Evidence\n\n\n* Connections\n\n\n* Remaining Questions/Next Steps\n\n")
+                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:synthesis:\n:PROPERTIES:\n:TYPE: synthesis\n:DATE: %U\n:END:\n\n* Topic Summary\n\n\n* Argument\n\n\n* Evidence\n\n\n* Connections\n\n\n* Remaining Questions/Next Steps\n\n")
         :unnarrowed t))
    )
   :config
@@ -2102,15 +2128,94 @@ Related people, events, concepts
   (define-key js2-mode-map (kbd "M-.") 'xref-find-definitions)
   (define-key js2-mode-map (kbd "M-,") 'xref-pop-marker-stack))
 
+;; Go development
+(use-package go-mode
+  :defer t
+  :hook ((go-mode . lsp)
+         (before-save . gofmt-before-save))
+  :config
+  (setq gofmt-command "gofmt")
+  (setq tab-width 4)
+  (setq go-tab-width 4))
+
+(use-package go-guru
+  :defer t
+  :hook (go-mode . go-guru-hl-identifier-mode))
+
+(use-package gorepl-mode
+  :defer t
+  :hook (go-mode . gorepl-mode))
+
+;; Go testing support
+(defun jah/go-run-tests ()
+  "Run go tests for current package."
+  (interactive)
+  (if (string-match "go" (file-name-extension (buffer-file-name)))
+      (save-buffer))
+  (shell-command "cd . && go test"))
+
+(defun jah/go-run-package ()
+  "Run current Go package."
+  (interactive)
+  (shell-command (concat "cd " (file-name-directory (buffer-file-name)) " && go run .")))
+
+(with-eval-after-load 'go-mode
+  (define-key go-mode-map (kbd "C-c C-t") 'jah/go-run-tests)
+  (define-key go-mode-map (kbd "C-c C-r") 'jah/go-run-package))
+
+;; Writing tools
+(defun jah/org-count-words ()
+    "Add word count to each heading property drawer in an Org mode buffer."
+    (interactive)
+    (org-map-entries
+     (lambda ()
+       (let* ((start (point))
+              (end (save-excursion (org-end-of-subtree)))
+              (word-count (count-words start end)))
+         (org-set-property "wordcount" (number-to-string word-count))
+         (unless (org-entry-get nil "target")
+           (org-set-property "target" "0"))))))
+
+(defun ews-org-insert-notes-drawer ()
+    "Generate or open a NOTES drawer under the current heading."
+    (interactive)
+    (push-mark)
+    (org-previous-visible-heading 1)
+    (next-line)
+    (org-beginning-of-line)
+    (if (looking-at-p "^[ \t]*:NOTES:")
+        (progn
+          (org-fold-hide-drawer-toggle 'off)
+          (re-search-forward "^[ \t]*:END:" nil t)
+          (previous-line)
+          (org-end-of-line)
+          (org-return))
+      (org-insert-drawer nil "NOTES"))
+    (org-unlogged-message "Press <C-u C-SPACE> to return to the previous position."))
+
+  (with-eval-after-load "org"
+    (define-key org-mode-map (kbd "C-c C-x n") #'ews-org-insert-notes-drawer))
+
 ;; Custom keybinds 
 (define-key custom-bindings-map (kbd "M-o") 'other-window)
-
 (define-key custom-bindings-map (kbd "C-c b") 'ibuffer)
-
 (define-key custom-bindings-map (kbd "C-f") 'forward-sexp)
 (define-key custom-bindings-map (kbd "C-b") 'backward-sexp)
-
 (define-key custom-bindings-map (kbd "C-c u") 'revert-buffer)
+
+;; Copy/paste with macOS bindings
+(define-key custom-bindings-map (kbd "M-c") 'clipboard-kill-ring-save)
+(define-key custom-bindings-map (kbd "M-v") 'clipboard-yank)
+
+;; Hyperlink insertion function for org-mode
+(defun jah/org-insert-link-as-title ()
+  "Insert an org link where both the link and title are the same URL."
+  (interactive)
+  (let ((url (read-string "URL: ")))
+    (when (and url (not (string-empty-p url)))
+      (insert (format "[[%s][%s]]" url url)))))
+
+(define-key custom-bindings-map (kbd "C-c h l") 'jah/org-insert-link-as-title)
 
 ;; Writing workflow keybindings under C-c w
 (define-key custom-bindings-map (kbd "C-c w d f") 'consult-org-roam-file-find)
@@ -2127,6 +2232,29 @@ Related people, events, concepts
 (define-key custom-bindings-map (kbd "C-c w b e") 'citar-open)
 
 ;; Org roam node operations
-(define-key custom-bindings-map (kbd "C-c w n f") 'org-roam-node-find)
-(define-key custom-bindings-map (kbd "C-c w n i") 'org-roam-node-insert)
-(define-key custom-bindings-map (kbd "C-c w n t") 'org-roam-tag-add)
+(define-key custom-bindings-map (kbd "C-c w r f") 'org-roam-node-find)
+(define-key custom-bindings-map (kbd "C-c w r i") 'org-roam-node-insert)
+(define-key custom-bindings-map (kbd "C-c w r t") 'org-roam-tag-add)
+
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages nil))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(eval-sexp-fu-flash ((t (:background "#D9EDFC"))))
+ '(org-document-title ((t (:height 1.2))))
+ '(outline-1 ((t (:height 1.2))))
+ '(outline-2 ((t (:height 1.2))))
+ '(outline-3 ((t (:height 1.2))))
+ '(outline-4 ((t (:height 1.2))))
+ '(outline-5 ((t (:height 1.2))))
+ '(outline-6 ((t (:height 1.2))))
+ '(outline-7 ((t (:height 1.2))))
+ '(outline-8 ((t (:height 1.2))))
+ '(outline-9 ((t (:height 1.2)))))
