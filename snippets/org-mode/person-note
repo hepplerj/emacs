@@ -1,0 +1,29 @@
+# -*- mode: snippet -*-
+# name: person
+# key: person
+# --
+:PROPERTIES:
+:NAME: ${1:Full Name}
+:BIRTH_DATE:
+:DEATH_DATE:
+:OCCUPATIONS:
+:LOCATIONS:
+:FAITH:
+:AFFILIATIONS:
+:THEMES: 
+:END:
+
+* Biography
+
+
+* Connections
+
+
+* Key Events
+
+
+* Relevant Documents
+
+
+* Notes
+$0

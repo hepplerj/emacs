@@ -1,0 +1,40 @@
+# -*- mode: snippet -*-
+# name: concept-note
+# key: cnote
+# --
+:PROPERTIES:
+:TYPE:     concept
+:DATE:     `(format-time-string "%Y-%m-%d")`
+:TOPICS:   ${1:Main Topics/Themes}
+:END:
+
+* Definition
+${2:Definition of the concept}
+
+* Historical Context
+#+BEGIN_COMMENT
+- When/where did this concept emerge?
+- How was it used by historical actors?
+- How have historians defined it?
+#+END_COMMENT
+${3:Historical context}
+
+* Related Research Notes
+
+* Related Sources
+
+* Historiographical Connections
+
+* Connections
+#+BEGIN_COMMENT
+Related people, events, concepts
+#+END_COMMENT
+
+* Implications for Narrative
+#+BEGIN_COMMENT
+- How does this concept help explain historical change?
+- Where might it appear in the book?
+#+END_COMMENT
+
+* Remaining Questions
+$0

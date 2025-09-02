@@ -1,0 +1,40 @@
+# -*- mode: snippet -*-
+# name: research-note
+# key: rnote
+# --
+:PROPERTIES:
+:TYPE:     research-note
+:DATE:     `(format-time-string "%Y-%m-%d")`
+:END:
+
+* Core Idea
+#+BEGIN_COMMENT
+Specific analytical insight
+#+END_COMMENT
+${1:Core analytical insight}
+
+* Argument
+${2:Main argument}
+
+* Supporting Evidence
+
+* Related Concepts
+
+* Connections
+#+BEGIN_COMMENT
+Related people, events, places
+#+END_COMMENT
+
+* Implications
+#+BEGIN_COMMENT
+- Why does this matter?
+- How does it challenge/support existing scholarship?
+- Where might this appear in the narrative?
+#+END_COMMENT
+
+* Remaining Questions/Next Steps
+#+BEGIN_COMMENT
+- What's unclear or needs more evidence?
+- What to look for in further research?
+#+END_COMMENT
+$0

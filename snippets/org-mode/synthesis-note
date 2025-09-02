@@ -1,0 +1,23 @@
+# -*- mode: snippet -*-
+# name: synthesis-note
+# key: snote
+# --
+:PROPERTIES:
+:TYPE: synthesis
+:DATE: `(format-time-string "[%Y-%m-%d %a %H:%M]")`
+:END:
+
+* Topic Summary
+${1:Summary of what you're synthesizing}
+
+* Argument
+${2:Main synthetic argument}
+
+* Evidence
+${3:Supporting evidence from multiple sources}
+
+* Connections
+${4:How this connects to broader themes}
+
+* Remaining Questions/Next Steps
+$0

@@ -1,0 +1,46 @@
+# -*- mode: snippet -*-
+# name: primary-source
+# key: psource
+# --
+:DATE:     
+:CREATOR:  
+:PUBLISHER:
+:PUBLICATION:
+:DATE_CREATED:
+:SOURCE:
+:PEOPLE: 
+:ORGANIZATIONS: 
+:LOCATIONS: 
+:TOPICS: 
+:TROPY: 
+:END:
+
+#+TITLE:
+#+FILETAGS: :source/primary:
+
+* Abstract / Overview
+#+BEGIN_COMMENT
+Brief summary of what this is (who, what, where, when)
+#+END_COMMENT
+
+* Key Excerpts
+
+
+* Initial Observations
+#+BEGIN_COMMENT
+- What themes does this connect to? (link with [[id:xxx][concept notes]])
+- Who produced this? For what purpose?
+- What audience?
+- Relation to other sources?
+#+END_COMMENT
+
+* Links
+#+BEGIN_COMMENT
+Related people, places, links
+#+END_COMMENT
+
+* Notes
+
+
+* Transcription
+$0
