@@ -1,53 +1,55 @@
-# Primary Source Template
-# name: primary-source
-# key: psource
+# Letter Template  
+# name: letter-primary-source
+# key: psletter
 # --
 :DATE_CREATED: `(format-time-string "[%Y-%m-%d %a %H:%M]")`
 :DATE:     $1
-:SOURCE_TYPE: $2
-:PUBLICATION: $3
-:CREATOR:  $4
+:SOURCE_TYPE: letter
+:LETTER_TYPE: $2
+:SENDER:   $3
+:RECIPIENT: $4
 :ARCHIVE:  $5
 :COLLECTION: $6
 :BOX:      $7
 :FOLDER:   $8
 :END:
-#+title: $9
+#+title: Letter: $3 to $4 - $1
 #+filetags: :project/sagebrush:
 
 * Source Information
-- Source: $9, $3, $1
-- Tropy: $10
+- Source: Letter from $3 to $4, $1
+- Tropy: $9
 
 * Content Summary
-$11
+$10
 
 * Key Excerpts
-$12
+$11
 
 * Themes
-$13
+$12
 
 * People
-$14
+- [[$3]] (sender)
+- [[$4]] (recipient)
+$13
 
 * Organizations
-$15
+$14
 
 * Places
-$16
+$15
 
 * Analysis
-$17
+$16
 
 * Cross-references
-$18
+$17
 
 * Notes
-$19
+$18
 
 * Transcription
 ** TODO Needs transcription
 
 $0
-

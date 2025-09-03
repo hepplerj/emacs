@@ -276,6 +276,11 @@
        :rev :newest
        :branch "main"))
 
+(use-package nano-theme
+  :vc (:url "https://github.com/rougier/nano-theme"
+            :rev :newest
+            :branch "main"))
+
 (setq custom-safe-themes t)
 
 (defvar jah/default-dark-theme  'doom-nord)
@@ -284,7 +289,7 @@
 (defvar jah/default-dark-accent-colour  "SkyBlue4")
 (defvar jah/default-light-accent-colour "#D9EDFC")
 
-(load-theme jah/default-dark-theme t)
+(load-theme jah/default-light-theme t)
 
 (use-package autothemer
   :defer t)
@@ -1395,9 +1400,9 @@ When called without a prefix argument, kill just the current buffer
 (use-package org-mem
   :defer
   :config
-  (setq org-mem-do-sync-with-org-id t) ;; Optional
+  (setq org-mem-do-sync-with-org-id t)
   (setq org-mem-watch-dirs
-        (list "~/Documents/notes/")) ;; Your org-roam-directory here
+        (list "~/Documents/notes/"))
   (org-mem-updater-mode))
 
 (use-package org-node
@@ -1408,6 +1413,7 @@ When called without a prefix argument, kill just the current buffer
     (keymap-set org-mode-map "M-o n" org-node-org-prefix-map))
   :config
   (org-node-cache-mode)
+  (org-node-backlink-mode)
   (org-node-roam-accelerator-mode)
   (setq org-node-creation-fn #'org-node-new-via-roam-capture)
   (setq org-node-file-slug-fn #'org-node-slugify-like-roam-default)
@@ -1423,198 +1429,351 @@ When called without a prefix argument, kill just the current buffer
   (org-roam-directory "~/Documents/notes")
   (org-roam-completion-everywhere t)
   (org-roam-capture-templates
-   '(("d" "default" plain
-      "%?"
-      :target (file+head "%<%Y%m%d%H%M%S>-${slug}.org" "#+title: ${title}\n#+date: %U\n#+filetags: \n\n")
-      :unnarrowed t)
-
-     ;; PRIMARY SOURCES
-     ("s" "Primary Source" plain
-      ":PROPERTIES:
-:DATE:     
-:CREATOR:  
-:PUBLISHER:
-:DATE_CREATED: %<%Y-%m-%d>
-:ARCHIVE:
-:COLLECTION: 
-:BOX: 
-:FOLDER:
-:PEOPLE: 
-:ORGANIZATIONS: 
-:LOCATIONS: 
-:TOPICS: 
-:TROPY:
+      '(("g" "General Source" plain
+         ":PROPERTIES:
+:ID:       %(org-id-new)
+:DATE_CREATED: %U
+:DATE:     %^{Document Date}
+:SOURCE_TYPE: %^{Source Type|newspaper|book|report|article|interview|speech|memo|minutes}
+:PUBLICATION: %^{Publication/Publisher}
+:CREATOR:  %^{Author/Creator}
+:ARCHIVE:  %^{Archive}
+:COLLECTION: %^{Collection}
+:BOX:      %^{Box}
+:FOLDER:   %^{Folder}
 :END:
 #+title: %^{Source Title}
-#+filetags: :project/sagebrush:source/primary:
+#+filetags: :project/sagebrush:primary-source:
 
-* Abstract / Overview
-#+BEGIN_COMMENT
-Brief summary of what this is (who, what, where, when)}
-#+END_COMMENT
+* Source Information
+- Source: %\\1, %\\2, %\\3
+- Tropy: %^{Tropy Link (optional)}
 
+* Content Summary
+%^{Brief summary of what this is (who, what, where, when)}
 
 * Key Excerpts
 
 
-* Initial Observations
-#+BEGIN_COMMENT
-- What themes does this connect to? (link with concept notes)
-- Who produced this? For what purpose?
-- What audience?
-- Relation to other sources?
-#+END_COMMENT
+* Themes
 
 
-* Links
-#+BEGIN_COMMENT
-Related people, places, links
-#+END_COMMENT
+* People
+
+
+* Organizations
+
+
+* Places
+
+
+* Analysis
+
+
+* Cross-references
 
 
 * Notes
+%^{Initial thoughts/questions}
 
+* Transcription
+** TODO Needs transcription"
+         :target (file+head "sources/%<%Y%m%d%H%M%S>-${slug}.org"
+                           ""))
 
-* Transcription"
-      :target (file+head "sagebrush/04-sources/%<%Y%m%d%H%M%S>-${slug}.org" "")
-      :unnarrowed t)
-
-     ;; RESEARCH NOTES
-     ("r" "Research Note" plain
-      ":PROPERTIES:
-:TYPE:     research-note
-:DATE:     %<%Y-%m-%d>
+        ("l" "Letter" plain
+         ":PROPERTIES:
+:ID:       %(org-id-new)
+:DATE_CREATED: %U
+:DATE:     %^{Letter Date}
+:SOURCE_TYPE: letter
+:LETTER_TYPE: %^{Type|personal|business|official}
+:SENDER:   %^{Sender}
+:RECIPIENT: %^{Recipient}
+:ARCHIVE:  %^{Archive}
+:COLLECTION: %^{Collection}
+:BOX:      %^{Box}
+:FOLDER:   %^{Folder}
 :END:
-#+title: %^{Research Note Title}
-#+filetags: :project/sagebrush:analysis:
+#+title: Letter: %\\4 to %\\5 - %\\2
+#+filetags: :project/sagebrush:
 
-* Core Idea
-#+BEGIN_COMMENT
-Specific analytical insight
-#+END_COMMENT
-%^{Core analytical insight}
+* Source Information
+- Source: Letter from %\\4 to %\\5, %\\2
+- Tropy: %^{Tropy Link (optional)}
 
-* Argument
-%?
+* Content Summary
+%^{Brief summary of letter content}
+
+* Key Excerpts
+
+
+* Themes
+
+
+* People
+- [[%\\4]] (sender)
+- [[%\\5]] (recipient)
+
+* Organizations
+
+
+* Places
+
+
+* Analysis
+
+
+* Cross-references
+
+
+* Notes
+%^{Initial thoughts/questions}
+
+* Transcription
+** TODO Needs transcription"
+         :target (file+head "sources/%<%Y%m%d%H%M%S>-${slug}.org"
+                           ""))
+
+        ("p" "Person" plain
+         ":PROPERTIES:
+:ID:       %(org-id-new)
+:DATE_CREATED: %U
+:BIRTH_YEAR: %^{Birth Year (if known)}
+:DEATH_YEAR: %^{Death Year (if known)}
+:OCCUPATION: %^{Primary Occupation}
+:LOCATION:  %^{Primary Location/Region}
+:END:
+#+title: %^{Full Name}
+#+filetags: :project/sagebrush:biography:
+
+* Biographical Information
+%^{Basic biographical details}
+
+* Role in Research
+%^{Why this person matters to your project}
+
+* Key Relationships
+** Family
+
+
+** Professional
+
+
+** Political/Social
+
+
+* Timeline
+** Major Events
+
+
+* Sources Mentioning This Person
+%^{Initial sources - more will be added via backlinks}
+
+* Analysis
+%^{Your interpretation of this person's significance}
+
+* Research Questions
+%^{What you want to know more about}"
+         :target (file+head "people/%<%Y%m%d%H%M%S>-${slug}.org"
+                           ""))
+
+        ("o" "Organization" plain
+         ":PROPERTIES:
+:ID:       %(org-id-new)
+:DATE_CREATED: %U
+:FOUNDED:  %^{Founded Year (if known)}
+:DISSOLVED: %^{Dissolved Year (if applicable)}
+:ORG_TYPE: %^{Type|government|business|advocacy|professional|religious|social}
+:LOCATION: %^{Headquarters/Primary Location}
+:END:
+#+title: %^{Organization Name}
+#+filetags: :project/sagebrush:organization:
+
+* Overview
+%^{Brief description of the organization}
+
+* Role in Research
+%^{Why this organization matters to your project}
+
+* Key Leadership
+** Founders
+
+
+** Important Leaders/Members
+
+
+* Organizational Structure
+%^{How was it organized? Departments, branches, etc.}
+
+* Goals and Activities
+** Stated Mission
+
+
+** Primary Activities
+
+
+** Political/Social Positions
+
+
+* Timeline
+** Major Events/Milestones
+
+
+* Sources Mentioning This Organization
+%^{Initial sources - more will be added via backlinks}
+
+* Analysis
+%^{Your interpretation of this organization's significance}
+
+* Research Questions
+%^{What you want to know more about}"
+         :target (file+head "organizations/%<%Y%m%d%H%M%S>-${slug}.org"
+                           ""))
+
+        ("s" "Source Analysis" plain
+         ":PROPERTIES:
+:ID:       %(org-id-new)
+:DATE_CREATED: %U
+:ANALYSIS_TYPE: %^{Analysis Type|newspaper-coverage|organizational-communications|government-documents|correspondence|hearing-transcripts|policy-documents}
+:TIME_PERIOD: %^{Time Period}
+:SOURCE_COUNT: %^{Number of Sources}
+:GEOGRAPHIC_SCOPE: %^{Geographic Scope}
+:STATUS: %^{Status|in-progress|complete|needs-revision}
+:END:
+#+title: %^{Analysis Title}
+#+filetags: :project/sagebrush:source-analysis:
+
+* Research Question
+%^{What question are you trying to answer with this analysis?}
+
+* Sources Analyzed
+%^{List the sources you're synthesizing - add more as you work}
+
+* Patterns Identified
+** %^{Pattern Category 1}
+
+
+** %^{Pattern Category 2}
+
+
+** Evolution Over Time
+
+
+* Key Evidence
+** Most Significant Quotes
+
+
+** Data/Statistics
+
+
+** Representative Examples
+
+
+* Contradictions & Gaps
+** What Sources Disagree About
+
+
+** What's Missing from the Evidence
+
+
+** Methodological Limitations
+
+
+* Connections to Themes
+%^{Which theme notes does this support? Use [[links]]}
+
+* Next Steps
+** Additional Sources Needed
+
+
+** Further Analysis Required
+
+
+** Questions for Follow-up Research"
+         :target (file+head "analysis/%<%Y%m%d%H%M%S>-${slug}.org"
+                           ""))
+
+        ("t" "Theme/Argument" plain
+         ":PROPERTIES:
+:ID:       %(org-id-new)
+:DATE_CREATED: %U
+:ARGUMENT_STRENGTH: %^{Argument Strength|developing|moderate|strong|needs-work}
+:CHAPTER_CANDIDATE: %^{Chapter Candidate?|yes|no|maybe}
+:TIME_PERIOD: %^{Time Period}
+:GEOGRAPHIC_SCOPE: %^{Geographic Scope}
+:STATUS: %^{Status|brainstorming|developing|drafting|revising|complete}
+:END:
+#+title: %^{Theme/Argument Title}
+#+filetags: :project/sagebrush:theme:
+
+* Core Argument
+%^{State your main historical argument clearly}
 
 * Supporting Evidence
+** From Source Analysis
+%^{Link to source analysis notes that support this theme}
 
-* Related Concepts
+** Key Primary Sources
+%^{Most important individual sources}
 
-* Connections
-#+BEGIN_COMMENT
-Related people, events, places
-#+END_COMMENT
+** Data Points
+%^{Statistics, numbers, quantitative evidence}
 
-* Implications
-#+BEGIN_COMMENT
-- Why does this matter?
-- How does it challenge/support existing scholarship?
-- Where might this appear in the narrative?
-#+END_COMMENT
+* Counter-Evidence & Complications
+** Sources That Contradict
 
-* Remaining Questions/Next Steps
-#+BEGIN_COMMENT
-- What's unclear or needs more evidence?
-- What to look for in further research?
-#+END_COMMENT"
-      :target (file+head "sagebrush/03-analysis/%<%Y%m%d%H%M%S>-${slug}.org" "")
-      :unnarrowed t)
 
-     ;; CONCEPT NOTES
-     ("c" "Concept Note" plain
-      ":PROPERTIES:
-:TYPE:     concept
-:DATE:     %<%Y-%m-%d>
-:TOPICS:   %^{Main Topics/Themes}
-:END:
-#+title: %^{Concept Title}
-#+filetags: :project/sagebrush:concept:
+** Alternative Interpretations
 
-* Definition
-%^{Definition of the concept}
 
-* Historical Context
-#+BEGIN_COMMENT
-- When/where did this concept emerge?
-- How was it used by historical actors?
-- How have historians defined it?
-#+END_COMMENT
-%?
+** Limitations of Current Evidence
 
-* Related Research Notes
 
-* Related Sources
+* Broader Historical Context
+** Existing Historiography
 
-* Historiographical Connections
 
-* Connections
-#+BEGIN_COMMENT
-Related people, events, concepts
-#+END_COMMENT
+** How This Fits/Challenges Current Understanding
 
-* Implications for Narrative
-#+BEGIN_COMMENT
-- How does this concept help explain historical change?
-- Where might it appear in the book?
-#+END_COMMENT
 
-* Remaining Questions"
-      :target (file+head "sagebrush/03-analysis/%<%Y%m%d%H%M%S>-${slug}.org" "")
-      :unnarrowed t)
+** Connections to Larger Historical Patterns
 
-     ;; HISTORIOGRAPHICAL NOTE
-     ("h" "Historiography Note" plain
-      ":PROPERTIES:
-:TYPE:     historiography
-:DATE:     %<%Y-%m-%d>
-:TOPICS:   %^{Historiographical Topics}
-:END:
-#+title: %^{Historiographical Theme}
-#+filetags: :project/sagebrush:historiography:
 
-* Topic Summary
-%^{One-sentence summary of the debate}
+* Argument Development
+** Strengths of Current Evidence
 
-* Key Works
 
-* Trends in the Debate
-- Early interpretations:
-- Revisionist challenges:
-- Recent syntheses:
-- Unresolved questions:
+** Weaknesses to Address
 
-* Connections to Research
 
-* Evidence
-#+BEGIN_COMMENT
-- Supporting primary sources
-- Key secondary works
-#+END_COMMENT
+** Research Needed to Strengthen
 
-* Relevance to Narrative
-#+BEGIN_COMMENT
-- Where/why does this debate matter for your story?
-- Which chapter(s) does it inform?
-#+END_COMMENT
 
-* Remaining Questions/Next Steps"
-      :target (file+head "sagebrush/03-analysis/%<%Y%m%d%H%M%S>-${slug}.org" "")
-      :unnarrowed t)
+* Chapter Potential
+%^{If this becomes a chapter, what would it look like?}
 
-     ;; PEOPLE
-     ("p" "Person" plain
-        "%?"
-        :target (file+head "sagebrush/01-notes/%<%Y%m%d%H%M%S>-${slug}.org"
-                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:biography:\n:PROPERTIES:\n:NAME: \n:ROAM_ALIASES: \n:BIRTH_DATE: \n:DEATH_DATE: \n:OCCUPATIONS: \n:LOCATIONS: \n:AFFILIATIONS: \n:FAITH: \n:THEMES: \n:END:\n\n* Biography\n\n\n* Connections\n\n\n* Key Events\n\n\n* Relevant Documents\n\n\n* Notes\n\n")
-        :unnarrowed t)
+* Connections to Other Themes
+** Themes This Supports
 
-     ;; SYNTHESIS
-     ("y" "Synthesis/Bridge Note" plain
-        "%?"
-        :target (file+head "sagebrush/03-analysis/%<%Y%m%d%H%M%S>-${slug}.org"
-                          "#+TITLE: ${title}\n#+FILETAGS: :project/sagebrush:synthesis:\n:PROPERTIES:\n:TYPE: synthesis\n:DATE: %U\n:END:\n\n* Topic Summary\n\n\n* Argument\n\n\n* Evidence\n\n\n* Connections\n\n\n* Remaining Questions/Next Steps\n\n")
-        :unnarrowed t))
+
+** Themes This Challenges
+
+
+** Related Arguments
+
+
+* Research Gaps
+** What You Still Need to Find
+
+
+** Questions for Further Investigation
+
+
+** Archives/Sources to Explore"
+         :target (file+head "themes/%<%Y%m%d%H%M%S>-${slug}.org"
+                           "")
+         :unnarrowed t))
    )
   :config
   ;; Sync my Org Roam database automatically

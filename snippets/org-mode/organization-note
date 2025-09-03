@@ -1,0 +1,54 @@
+# Organization Template
+# name: organization  
+# key: psorg
+# --
+:DATE_CREATED: `(format-time-string "[%Y-%m-%d %a %H:%M]")`
+:FOUNDED:  $1
+:DISSOLVED: $2
+:ORG_TYPE: $3
+:LOCATION: $4
+:END:
+#+title: $5
+#+filetags: :project/sagebrush:organization:
+
+* Overview
+$6
+
+* Role in Research
+$7
+
+* Key Leadership
+** Founders
+$8
+
+** Important Leaders/Members
+$9
+
+* Organizational Structure
+$10
+
+* Goals and Activities
+** Stated Mission
+$11
+
+** Primary Activities
+$12
+
+** Political/Social Positions
+$13
+
+* Timeline
+** Major Events/Milestones
+$14
+
+* Sources Mentioning This Organization
+:BACKLINKS:
+:END:
+
+* Analysis
+$16
+
+* Research Questions
+$17
+
+$0

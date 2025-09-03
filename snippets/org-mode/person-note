@@ -1,29 +1,51 @@
-# -*- mode: snippet -*-
+# Person Template
 # name: person
-# key: person
+# key: psperson
 # --
-:PROPERTIES:
-:NAME: ${1:Full Name}
-:BIRTH_DATE:
-:DEATH_DATE:
-:OCCUPATIONS:
-:LOCATIONS:
+:DATE_CREATED: `(format-time-string "[%Y-%m-%d %a %H:%M]")`
+:BIRTH_DATE: $1
+:DEATH_DATE: $2
+:LOCATION:  $4
 :FAITH:
 :AFFILIATIONS:
-:THEMES: 
+:END:
+#+title: $5
+#+filetags: :project/sagebrush:biography:
+
+* Biographical Information
+$6
+
+* Role in Research
+$7
+
+* Occupations
+
+
+* Locations
+
+
+* Key Relationships
+** Family
+$8
+
+** Professional
+$9
+
+** Political/Social
+$10
+
+* Timeline
+** Major Events
+$11
+
+* Sources Mentioning This Person
+:BACKLINKS:
 :END:
 
-* Biography
+* Analysis
+$13
 
+* Research Questions
+$14
 
-* Connections
-
-
-* Key Events
-
-
-* Relevant Documents
-
-
-* Notes
 $0

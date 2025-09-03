@@ -1,23 +1,83 @@
-# -*- mode: snippet -*-
-# name: synthesis-note
+# Theme/Argument Template
+# name: theme-argument
 # key: snote
 # --
 :PROPERTIES:
-:TYPE: synthesis
-:DATE: `(format-time-string "[%Y-%m-%d %a %H:%M]")`
+:ID:       `(org-id-new)`
+:DATE_CREATED: `(format-time-string "[%Y-%m-%d %a %H:%M]")`
+:ARGUMENT_STRENGTH: $1
+:CHAPTER_CANDIDATE: $2
+:TIME_PERIOD: $3
+:GEOGRAPHIC_SCOPE: $4
+:STATUS: $5
 :END:
+#+title: $6
+#+filetags: :project/sagebrush:theme:
 
-* Topic Summary
-${1:Summary of what you're synthesizing}
+* Core Argument
+$7
 
-* Argument
-${2:Main synthetic argument}
+* Supporting Evidence
+** From Source Analysis
+$8
 
-* Evidence
-${3:Supporting evidence from multiple sources}
+** Key Primary Sources
+$9
 
-* Connections
-${4:How this connects to broader themes}
+** Data Points
+$10
 
-* Remaining Questions/Next Steps
+* Counter-Evidence & Complications
+** Sources That Contradict
+$11
+
+** Alternative Interpretations
+$12
+
+** Limitations of Current Evidence
+$13
+
+* Broader Historical Context
+** Existing Historiography
+$14
+
+** How This Fits/Challenges Current Understanding
+$15
+
+** Connections to Larger Historical Patterns
+$16
+
+* Argument Development
+** Strengths of Current Evidence
+$17
+
+** Weaknesses to Address
+$18
+
+** Research Needed to Strengthen
+$19
+
+* Chapter Potential
+$20
+
+* Connections to Other Themes
+** Themes This Supports
+$21
+
+** Themes This Challenges
+$22
+
+** Related Arguments
+$23
+
+* Research Gaps
+** What You Still Need to Find
+$24
+
+** Questions for Further Investigation
+$25
+
+** Archives/Sources to Explore
+$26
+
 $0
