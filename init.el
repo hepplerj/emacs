@@ -817,6 +817,8 @@ When called without a prefix argument, kill just the current buffer
   (setq completion-styles '(orderless basic partial-completion)
         completion-category-overrides '((file (styles basic partial-completion)))))
 
+(use-package eat :ensure t)
+
 ;; (use-package copilot
 ;;   :vc (:url "https://github.com/copilot-emacs/copilot.el"
 ;;             :rev :newest
@@ -1085,24 +1087,35 @@ When called without a prefix argument, kill just the current buffer
 ;; Org 
 (use-package org
   :defer t
+  :init
+  (setq org-archive-location "~/Documents/org/archive.org::datetree/")
+  (setq org-clock-persist t)
+  (setq org-clock-auto-clock-resolution t)
+  (setq org-startup-folded 'nofold)
+  (setq org-clock-out-remove-zero-time-clocks t)
+  (setq org-clock-idle-time 5)
+  (setq org-clock-in-resume t)
+  (setq org-hide-emphasis-markers t)
+  (setq org-log-done 'time)
+  (setq org-log-into-drawer t) ; hide spam
 
-;; Visuals 
-;;:hook (org-mode . olivetti-mode) -- not sure I like this yet
+  ;; Visuals 
+  ;;:hook (org-mode . olivetti-mode) -- not sure I like this yet
 
-:config
-;; Resize Org headings
-(custom-set-faces
-'(org-document-title ((t (:height 1.2))))
-'(outline-1          ((t (:height 1.2))))
-'(outline-2          ((t (:height 1.2))))
-'(outline-3          ((t (:height 1.2))))
-'(outline-4          ((t (:height 1.2))))
-'(outline-5          ((t (:height 1.2))))
-'(outline-6          ((t (:height 1.2))))
-'(outline-7          ((t (:height 1.2))))
-'(outline-8          ((t (:height 1.2))))
-'(outline-9          ((t (:height 1.2)))))
-
+  :config
+  ;; Resize Org headings
+  (custom-set-faces
+   '(org-document-title ((t (:height 1.2))))
+   '(outline-1          ((t (:height 1.2))))
+   '(outline-2          ((t (:height 1.2))))
+   '(outline-3          ((t (:height 1.2))))
+   '(outline-4          ((t (:height 1.2))))
+   '(outline-5          ((t (:height 1.2))))
+   '(outline-6          ((t (:height 1.2))))
+   '(outline-7          ((t (:height 1.2))))
+   '(outline-8          ((t (:height 1.2))))
+   '(outline-9          ((t (:height 1.2)))))
+  
 (org-indent-mode -1)
 
 (setq org-startup-with-latex-preview t)
@@ -1164,95 +1177,6 @@ When called without a prefix argument, kill just the current buffer
                                           ("QUESTION" . 9744)
                                           ("DONE"     . 9745)))
   :hook (org-mode . org-superstar-mode))
-
-;; (use-package svg-tag-mode
-;;   :after org
-;;   :config
-;;   (defconst date-re "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}")
-;;   (defconst time-re "[0-9]\\{2\\}:[0-9]\\{2\\}")
-;;   (defconst day-re "[A-Za-z]\\{3\\}")
-;;   (defconst day-time-re (format "\\(%s\\)? ?\\(%s\\)?" day-re time-re))
-
-;;   (defun svg-progress-percent (value)
-;; 	(svg-image (svg-lib-concat
-;; 				(svg-lib-progress-bar (/ (string-to-number value) 100.0)
-;; 			      nil :margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
-;; 				(svg-lib-tag (concat value "%")
-;; 				  nil :stroke 0 :margin 0)) :ascent 'center))
-
-;;   (defun svg-progress-count (value)
-;; 	(let* ((seq (mapcar #'string-to-number (split-string value "/")))
-;;            (count (float (car seq)))
-;;            (total (float (cadr seq))))
-;; 	  (svg-image (svg-lib-concat
-;; 				  (svg-lib-progress-bar (/ count total) nil
-;; 					:margin 0 :stroke 2 :radius 3 :padding 2 :width 11)
-;; 				  (svg-lib-tag value nil
-;; 					:stroke 0 :margin 0)) :ascent 'center)))
-;;   (setq svg-tag-tags
-;;       `(;; Org tags
-;;         ;; (":\\([A-Za-z0-9]+\\)" . ((lambda (tag) (svg-tag-make tag))))
-;;         ;; (":\\([A-Za-z0-9]+[ \-]\\)" . ((lambda (tag) tag)))
-;;         
-;;         ;; Task priority
-;;         ("\\[#[A-Z]\\]" . ( (lambda (tag)
-;;                               (svg-tag-make tag :face 'org-priority 
-;;                                             :beg 2 :end -1 :margin 0))))
-
-;;         ;; Progress
-;;         ("\\(\\[[0-9]\\{1,3\\}%\\]\\)" . ((lambda (tag)
-;;           (svg-progress-percent (substring tag 1 -2)))))
-;;         ("\\(\\[[0-9]+/[0-9]+\\]\\)" . ((lambda (tag)
-;;           (svg-progress-count (substring tag 1 -1)))))
-;;         
-;;         ;; TODO / DONE
-;;         ;; ("TODO" . ((lambda (tag) (svg-tag-make "TODO" :face 'org-todo
-;; 		;; 									           :inverse t :margin 0))))
-;;         ;; ("DONE" . ((lambda (tag) (svg-tag-make "DONE" :face 'org-done :margin 0))))
-
-
-;;         ;; Citation of the form [cite:@Knuth:1984] 
-;;         ("\\(\\[cite:@[A-Za-z]+:\\)" . ((lambda (tag)
-;;                                           (svg-tag-make tag
-;;                                                         :inverse t
-;;                                                         :beg 7 :end -1
-;;                                                         :crop-right t))))
-;;         ("\\[cite:@[A-Za-z]+:\\([0-9]+\\]\\)" . ((lambda (tag)
-;;                                                 (svg-tag-make tag
-;;                                                               :end -1
-;;                                                               :crop-left t))))
-
-;;         
-;;         ;; Active date (with or without day name, with or without time)
-;;         (,(format "\\(<%s>\\)" date-re) .
-;;          ((lambda (tag)
-;;             (svg-tag-make tag :beg 1 :end -1 :margin 0))))
-;;         (,(format "\\(<%s \\)%s>" date-re day-time-re) .
-;;          ((lambda (tag)
-;;             (svg-tag-make tag :beg 1 :inverse nil :crop-right t :margin 0))))
-;;         (,(format "<%s \\(%s>\\)" date-re day-time-re) .
-;;          ((lambda (tag)
-;;             (svg-tag-make tag :end -1 :inverse t :crop-left t :margin 0))))
-
-;;         ;; Inactive date  (with or without day name, with or without time)
-;;          (,(format "\\(\\[%s\\]\\)" date-re) .
-;;           ((lambda (tag)
-;;              (svg-tag-make tag :beg 1 :end -1 :margin 0 :face 'org-date))))
-;;          (,(format "\\(\\[%s \\)%s\\]" date-re day-time-re) .
-;;           ((lambda (tag)
-;;              (svg-tag-make tag :beg 1 :inverse nil :crop-right t :margin 0 :face 'org-date))))
-;;          (,(format "\\[%s \\(%s\\]\\)" date-re day-time-re) .
-;;           ((lambda (tag)
-;;              (svg-tag-make tag :end -1 :inverse t :crop-left t :margin 0 :face 'org-date)))))))
-
-;; (add-hook 'org-mode-hook 'svg-tag-mode)
-
-;;(add-to-list 'font-lock-extra-managed-props 'display)
-;;(font-lock-add-keywords 'org-mode
-;;                        `(("^.*?\\( \\)\\(:[[:alnum:]_@#%:]+:\\)$"
-;;                           (1 `(face nil
-;;                                     display (space :align-to (- right ,(org-string-width (match-string 2)) 3)))
-;;                              prepend))) t)
 
 ;; General 
 (add-hook 'org-mode-hook #'(lambda () (electric-indent-local-mode -1)))
@@ -1391,10 +1315,10 @@ When called without a prefix argument, kill just the current buffer
 
 (setq org-archive-location (concat org-directory "archive.org::"))
 
-(setq org-capture-templates
-       `(("i" "Inbox" entry  (file "inbox.org")
-        ,(concat "* TODO %?\n"
-                 "/Entered on/ %U"))))
+;;(setq org-capture-templates
+;;       `(("i" "Inbox" entry  (file "inbox.org")
+;;        ,(concat "* TODO %?\n"
+ ;;                "/Entered on/ %U"))))
 (defun org-capture-inbox ()
      (interactive)
      (call-interactively 'org-store-link)
@@ -1448,17 +1372,21 @@ When called without a prefix argument, kill just the current buffer
   :config
   (org-node-cache-mode)
   (org-node-backlink-mode)
+  (setq org-node-backlink-aggressive t)
+  (org-node-complete-at-point-mode)
+  (add-hook 'after-save-hook 'org-node-rename-file-by-title)
   ;; Use regular capture instead of roam capture since we're migrating away from roam
   (setq org-node-creation-fn #'org-capture)
   (setq org-node-file-slug-fn #'org-node-slugify-like-roam-default)
   (setq org-node-file-timestamp-format "%Y%m%d%H%M%S-")
-  ;; Set the directory to match what was in org-roam
   (setq org-node-directory "~/Documents/notes"))
 
-;; Org Capture Templates - Migrated from org-roam-capture-templates
-;; Using org-node-capture-target for better integration
+;; Org Capture Templates
 (setq org-capture-templates
-      '(("g" "General Source" plain
+      '(("t" "Tasks" entry
+     (file+headline "" "Inbox")
+     "* TODO %?\n %U")
+        ("g" "General Source" plain
          (function org-node-capture-target)
          "#+title: %^{Source Title}
 #+filetags: :project/sagebrush:primary-source:
@@ -1660,6 +1588,7 @@ When called without a prefix argument, kill just the current buffer
 %^{What you want to know more about}"
          :empty-lines 1)))
 
+
 ;; Roam - DISABLED FOR ORG-NODE MIGRATION
 ;; (use-package org-roam
 ;;   :after org
@@ -1726,7 +1655,9 @@ When called without a prefix argument, kill just the current buffer
 
 ;; org-transclusion
 (use-package org-transclusion
-  :after org)
+  :after org
+  :config
+  (set-face-background 'org-transclusion "#222"))
 (define-key global-map (kbd "C-c t a") #'org-transclusion-add)
 (define-key global-map (kbd "C-c t m") #'org-transclusion-mode)
 
@@ -2264,7 +2195,6 @@ When called without a prefix argument, kill just the current buffer
 
 ;; Copy/paste with macOS bindings
 (define-key custom-bindings-map (kbd "M-c") 'clipboard-kill-ring-save)
-(define-key custom-bindings-map (kbd "M-v") 'clipboard-yank)
 
 ;; Hyperlink insertion function for org-mode
 (defun jah/org-insert-link-as-title ()
@@ -2319,3 +2249,20 @@ When called without a prefix argument, kill just the current buffer
  '(outline-7 ((t (:height 1.2))))
  '(outline-8 ((t (:height 1.2))))
  '(outline-9 ((t (:height 1.2)))))
+
+;;; Backups
+(setopt
+ ;; Put them in the unusual path /home/backups/ to avoid cluttering rg output.
+ backup-directory-alist `(("." . "/Users/jheppler/backups"))
+ delete-old-versions t ;; nil led to Emacs looking broken for newbie-me
+ vc-make-backup-files t ;; I don't commit regularly in every project
+ version-control t)
+
+;; Graceful degradation
+(unless (file-writable-p "/Users/jheppler/backups/")
+  (error "Disabling backups because can't write to: /Users/jheppler/backups/")
+  (setq backup-directory-alist nil)
+  (setq make-backup-files nil))
+
+;; Lesson learned
+(add-hook 'after-save-hook #'my-fix-invalid-backup-settings)
