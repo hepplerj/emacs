@@ -1,5 +1,7 @@
 ;;; -*- lexical-binding: t -*-
 
+(setq package-enable-at-startup nil)
+
 ;; Defer garbage collection
 (setq gc-cons-percentage 0.6)
 

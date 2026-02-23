@@ -28,6 +28,7 @@ backups.bak/
 /documents/book/.dir-locals.el
 .org-id-locations
 org-roam.db
+straight/
 
 /autosaves/
 /places

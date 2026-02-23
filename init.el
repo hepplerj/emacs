@@ -1,6 +1,25 @@
 ;;; -*- lexical-binding: t -*-
 
+(defvar bootstrap-version)
+(let ((bootstrap-file
+       (expand-file-name
+        "straight/repos/straight.el/bootstrap.el"
+        (or (bound-and-true-p straight-base-dir)
+            user-emacs-directory)))
+      (bootstrap-version 7))
+  (unless (file-exists-p bootstrap-file)
+    (with-current-buffer
+        (url-retrieve-synchronously
+         "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+         'silent 'inhibit-cookies)
+      (goto-char (point-max))
+      (eval-print-last-sexp)))
+  (load bootstrap-file nil 'nomessage))
+
+(setq straight-use-package-by-default t)
+
 (use-package gcmh
+  :straight t
   :config
   (setq gcmh-idle-delay 5
         gcmh-high-cons-threshold (* 20 1024 1024))
@@ -40,25 +59,8 @@
 
 (setq large-file-warning-threshold (* 50 1024 1024))
 
-;; Package manager 
-(require 'package)
+;; Package manager
 (require 'use-package)
-(require 'use-package-ensure)
-(setq use-package-always-ensure t)
-
-(setq package-archives
-      '(("GNU ELPA"     . "https://elpa.gnu.org/packages/")
-        ("MELPA"        . "https://melpa.org/packages/")
-        ("ORG"          . "https://orgmode.org/elpa/")
-        ("MELPA Stable" . "https://stable.melpa.org/packages/")
-        ("nongnu"       . "https://elpa.nongnu.org/nongnu/"))
-      package-archive-priorities
-      '(("GNU ELPA"     . 20)
-        ("MELPA"        . 15)
-        ("ORG"          . 10)
-        ("MELPA Stable" . 5)
-        ("nongnu"       . 0)))
-(package-initialize)
 
 ;; Local files 
 (defvar local-lisp (concat user-emacs-directory "local-lisp/"))
@@ -175,6 +177,35 @@
   ; don't show buffer name in title bar
   (setq frame-title-format ""))
 
+;; evil 
+(use-package evil
+  :straight t
+  :init
+  (setq evil-want-integration t)
+  (setq evil-want-keybinding nil)
+  :config
+  (evil-mode 1))
+
+(use-package evil-collection
+  :straight t
+  :after evil
+  :config
+  (evil-collection-init))
+
+(use-package general
+  :straight t
+  :config
+  (general-create-definer my/leader-keys
+    :keymaps '(normal insert visual emacs)
+    :prefix "SPC"
+    :global-prefix "C-SPC")
+
+  (my/leader-keys
+    "n"  '(:ignore t :which-key "notes")
+    "nn" '(org-capture :which-key "capture new note")
+    "nl" '(org-node-insert-link :which-key "insert link")
+    "nf" '(org-node-find-node :which-key "find node")))
+
 ;; Programming 
 (setq-default cursor-type 'bar)
 
@@ -211,10 +242,10 @@
 (add-hook 'prog-mode 'whitespace-mode)
 
 ;; Fonts 
-(defvar jah/font-height 115)
+(defvar jah/font-height 140)
 
 (when (eq system-type 'darwin)
-  (setq jah/font-height 115))
+  (setq jah/font-height 140))
 
 (when (member "Fragment Mono" (font-family-list))
   (set-face-attribute 'default nil :font "Fragment Mono" :height jah/font-height)
@@ -271,20 +302,16 @@
   (setq doom-themes-enable-bold t     ; if nil, bold is universally disabled
         doom-themes-enable-italic t)) ; if nil, italics is universally disabled
 
-(use-package south-theme
-  :vc (:url "https://github.com/SophieBosio/south"
-       :rev :newest
-       :branch "main"))
+(straight-use-package '(south-theme :type git :host github
+                                    :repo "SophieBosio/south" :branch "main"))
 
-(use-package nano-theme
-  :vc (:url "https://github.com/rougier/nano-theme"
-            :rev :newest
-            :branch "main"))
+(straight-use-package '(nano-theme :type git :host github
+                                   :repo "rougier/nano-theme"))
 
 (setq custom-safe-themes t)
 
-(defvar jah/default-dark-theme  'doom-nord)
-(defvar jah/default-light-theme 'south)
+(defvar jah/default-dark-theme  'nano-dark)
+(defvar jah/default-light-theme 'nano-light)
 
 (defvar jah/default-dark-accent-colour  "SkyBlue4")
 (defvar jah/default-light-accent-colour "#D9EDFC")
@@ -749,7 +776,7 @@ When called without a prefix argument, kill just the current buffer
 
 ;; Dired 
 (use-package dired
-  :ensure nil
+  :straight nil
   :hook (dired-mode . dired-hide-details-mode)
   :bind (:map dired-mode-map
               ("C-<right>" . dired-find-alternate-file)
@@ -1015,6 +1042,7 @@ When called without a prefix argument, kill just the current buffer
               ("C-M-s" . pdf-occur)))
 
 (use-package doc-view
+  :straight nil
   :hook (doc-view-mode . (lambda ()
                            (display-warning
                             emacs
@@ -1240,7 +1268,10 @@ When called without a prefix argument, kill just the current buffer
 		  (org-ql-block '(todo "PROG") ((org-ql-block-header "\n❯ In Progress")))
 		  (org-ql-block '(todo "NEXT") ((org-ql-block-header "\n❯ Next Up")))
           (org-ql-block '(todo "WAIT") ((org-ql-block-header "\n❯ Backlog")))
-		  (org-ql-block '(priority "A") ((org-ql-block-header "\n❯ Important"))))))
+		  (org-ql-block '(priority "A") ((org-ql-block-header "\n❯ Important")))
+          (org-ql-block '(and (todo "TODO") (tags "github"))
+                        ((org-ql-block-header "\n❯ GitHub Issues")
+                         (org-ql-block-files (list jah/github-issues-file)))))))
 
 
 (add-to-list 'org-agenda-custom-commands
@@ -1297,10 +1328,8 @@ When called without a prefix argument, kill just the current buffer
 
 (define-key custom-bindings-map (kbd "C-c d") 'org-mark-as-done)
 
-(use-package hide-lines
-  :vc (:url "https://github.com/vapniks/hide-lines.git"
-       :branch "master"
-       :rev :newest))
+(straight-use-package '(hide-lines :type git :host github
+                                   :repo "vapniks/hide-lines" :branch "master"))
 
 (defun hide-done-tasks ()
   (interactive)
@@ -1348,7 +1377,7 @@ When called without a prefix argument, kill just the current buffer
 ;;    (clojure    . t)))
 
 (use-package ob-python
-  :ensure nil
+  :straight nil
   :after (ob python)
   :config
   (setq org-babel-python-command python-shell-interpreter))
@@ -1383,211 +1412,259 @@ When called without a prefix argument, kill just the current buffer
 
 ;; Org Capture Templates
 (setq org-capture-templates
-      '(("t" "Tasks" entry
-     (file+headline "" "Inbox")
-     "* TODO %?\n %U")
-        ("g" "General Source" plain
-         (function org-node-capture-target)
-         "#+title: %^{Source Title}
-#+filetags: :project/sagebrush:primary-source:
-:PROPERTIES:
-:ID:       %(org-id-new)
-:DATE_CREATED: %U
-:DATE:     %^{Document Date}
-:SOURCE_TYPE: %^{Source Type|newspaper|book|report|article|interview|speech|memo|minutes}
-:PUBLICATION: %^{Publication/Publisher}
-:CREATOR:  %^{Author/Creator}
-:ARCHIVE:  %^{Archive}
-:COLLECTION: %^{Collection}
-:BOX:      %^{Box}
-:FOLDER:   %^{Folder}
-:END:
-
-* Source Information
-- Source: %\\1, %\\2, %\\3
-- Tropy: %^{Tropy Link (optional)}
-
-* Content Summary
-%^{Brief summary of what this is (who, what, where, when)}
-
-* Key Excerpts
-
-
-* Themes
-
-
-* People
-
-
-* Organizations
-
-
-* Places
-
-
-* Analysis
-
-
-* Cross-references
-
-
-* Notes
-%^{Initial thoughts/questions}
-
-* Transcription
-** TODO Needs transcription"
-         :empty-lines 1)
-
-        ("p" "Person" plain
-         (function org-node-capture-target)
-         "#+title: %^{Full Name}
-#+filetags: :project/sagebrush:biography:
-:PROPERTIES:
-:ID:       %(org-id-new)
-:DATE_CREATED: %U
-:BIRTH_YEAR: %^{Birth Year (if known)}
-:DEATH_YEAR: %^{Death Year (if known)}
-:OCCUPATION: %^{Primary Occupation}
-:LOCATION:  %^{Primary Location/Region}
-:END:
-
-* Biographical Information
-%^{Basic biographical details}
-
-* Role in Research
-%^{Why this person matters to your project}
-
-* Key Relationships
-** Family
-
-
-** Professional
-
-
-** Political/Social
-
-
-* Timeline
-** Major Events
-
-
-* Sources Mentioning This Person
-%^{Initial sources - more will be added via backlinks}
-
-* Analysis
-%^{Your interpretation of this person's significance}
-
-* Research Questions
-%^{What you want to know more about}"
-         :empty-lines 1)
-
-        ("l" "Letter" plain
-         (function org-node-capture-target)
-         "#+title: Letter: %^{Sender} to %^{Recipient} - %^{Date}
-#+filetags: :project/sagebrush:primary-source:
-:PROPERTIES:
-:ID:       %(org-id-new)
-:DATE_CREATED: %U
-:DATE:     %\\3
-:SOURCE_TYPE: letter
-:LETTER_TYPE: %^{Type|personal|business|official}
-:SENDER:   %\\1
-:RECIPIENT: %\\2
-:ARCHIVE:  %^{Archive}
-:COLLECTION: %^{Collection}
-:BOX:      %^{Box}
-:FOLDER:   %^{Folder}
-:END:
-
-* Source Information
-- Source: Letter from %\\1 to %\\2, %\\3
-- Tropy: %^{Tropy Link (optional)}
-
-* Content Summary
-%^{Brief summary of letter content}
-
-* Key Excerpts
-
-
-* Themes
-
-
-* People
-- [[%\\1]] (sender)
-- [[%\\2]] (recipient)
-
-* Organizations
-
-
-* Places
-
-
-* Analysis
-
-
-* Cross-references
-
-
-* Notes
-%^{Initial thoughts/questions}
-
-* Transcription
-** TODO Needs transcription"
-         :empty-lines 1)
-
-        ("o" "Organization" plain
-         (function org-node-capture-target)
-         "#+title: %^{Organization Name}
-#+filetags: :project/sagebrush:organization:
-:PROPERTIES:
-:ID:       %(org-id-new)
-:DATE_CREATED: %U
-:FOUNDED:  %^{Founded Year (if known)}
-:DISSOLVED: %^{Dissolved Year (if applicable)}
-:ORG_TYPE: %^{Type|government|business|advocacy|professional|religious|social}
-:LOCATION: %^{Headquarters/Primary Location}
-:END:
-
-* Overview
-%^{Brief description of the organization}
-
-* Role in Research
-%^{Why this organization matters to your project}
-
-* Key Leadership
-** Founders
-
-
-** Important Leaders/Members
-
-
-* Organizational Structure
-%^{How was it organized? Departments, branches, etc.}
-
-* Goals and Activities
-** Stated Mission
-
-
-** Primary Activities
-
-
-** Political/Social Positions
-
-
-* Timeline
-** Major Events/Milestones
-
-
-* Sources Mentioning This Organization
-%^{Initial sources - more will be added via backlinks}
-
-* Analysis
-%^{Your interpretation of this organization's significance}
-
-* Research Questions
-%^{What you want to know more about}"
-         :empty-lines 1)))
-
+      '(;; INBOX TASK
+        ("t" "Task" entry
+         (file (lambda () (concat org-directory "inbox.org")))
+         "* TODO %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n"
+         :prepend t)
+
+        ;; MEETING NOTES
+        ("m" "Meeting" entry
+         (file+datetree (lambda () (concat org-directory "work.org")))
+         "* %^{Meeting title}\n:PROPERTIES:\n:CREATED: %U\n:ATTENDEES: %^{Attendees}\n:END:\n\n** Agenda\n%?\n\n** Notes\n\n** Actions\n"
+         :tree-type week)
+
+        ;; NEWSPAPER SOURCE
+        ("n" "Newspaper Source" plain
+         (file (lambda () (expand-file-name 
+                           (concat (format-time-string "%Y%m%dT%H%M%S") "--%^{Slug}.org")
+                           "~/Documents/notes/sources/")))
+         ":PROPERTIES:\n:ID: %(shell-command-to-string \"uuidgen\" | tr -d '\\n')\n:CREATED: %U\n:DATE: %^{Date (YYYY-MM-DD)}\n:DOCTYPE: newspaper\n:END:\n#+TITLE: %^{Title}\n#+FILETAGS: :source:clipping:%^{Tags}:\n\n* Document\n:PROPERTIES:\n:PUBLISHER: %^{Publisher}\n:ARCHIVE: %^{Archive}\n:COLLECTION: %^{Collection}\n:BOX: %^{Box}\n:FOLDER: %^{Folder}\n:PDF: [[file:attachments/%^{PDF Name}.pdf]]\n:END:\n\n* Overview\n%?\n\n* Notes\n"
+         :unnarrowed t)
+
+        ;; CORRESPONDENCE SOURCE
+        ("c" "Correspondence Source" plain
+         (file (lambda () (expand-file-name 
+                           (concat (format-time-string "%Y%m%dT%H%M%S") "--%^{Slug}.org")
+                           "~/Documents/notes/sources/")))
+         ":PROPERTIES:\n:ID: %(shell-command-to-string \"uuidgen\" | tr -d '\\n')\n:CREATED: %U\n:DATE: %^{Date}\n:DOCTYPE: letter\n:END:\n#+TITLE: %^{Subject}\n#+FILETAGS: :source:correspondence:%^{Tags}:\n\n* Document\n:PROPERTIES:\n:FROM: %^{Sender}\n:TO: %^{Recipient}\n:ARCHIVE: %^{Archive}\n:COLLECTION: %^{Collection}\n:BOX: %^{Box}\n:FOLDER: %^{Folder}\n:END:\n\n* Notes\n%?"
+         :unnarrowed t)
+
+        ;; GENERAL SOURCE
+        ("s" "General Source" plain
+         (file (lambda () (expand-file-name 
+                           (concat (format-time-string "%Y%m%dT%H%M%S") "--%^{Slug}.org")
+                           "~/Documents/notes/sources/")))
+         ":PROPERTIES:\n:ID: %(shell-command-to-string \"uuidgen\" | tr -d '\\n')\n:CREATED: %U\n:DOCTYPE: %^{Type}\n:END:\n#+TITLE: %^{Title}\n#+FILETAGS: :source:%^{Tags}:\n\n* Document\n:PROPERTIES:\n:LOCATION: %^{Location}\n:END:\n\n* Notes\n%?"
+         :unnarrowed t)
+
+        ;; SYNTHESIS
+        ("a" "Synthesis" plain
+         (file (lambda () (expand-file-name 
+                           (concat (format-time-string "%Y%m%dT%H%M%S") "--%^{Slug}.org")
+                           "~/Documents/notes/synthesis/")))
+         ":PROPERTIES:\n:ID: %(shell-command-to-string \"uuidgen\" | tr -d '\\n')\n:CREATED: %U\n:TYPE: synthesis\n:STATUS: seedling\n:END:\n#+TITLE: %^{Concept Name}\n#+FILETAGS: :argument:%^{Tags}:\n\n* The Core Idea\n%?\n\n* Supporting Evidence\n- Link back to your Source Notes here (e.g., [[id:1282FAD5...]] from the Denver Post)\n\n* Related Arguments\n- "
+         :unnarrowed t))) 
+
+;; org-noter
+(setq org-noter-property-doc-file "PDF")
+
+;; (setq org-capture-templates
+;;       '(("t" "Tasks" entry
+;;      (file+headline "" "Inbox")
+;;      "* TODO %?\n %U")
+;;         ("g" "General Source" plain
+;;          (function org-node-capture-target)
+;;          "#+title: %^{Source Title}
+;; #+filetags: :project/sagebrush:primary-source:
+;; :PROPERTIES:
+;; :ID:       %(org-id-new)
+;; :DATE_CREATED: %U
+;; :DATE:     %^{Document Date}
+;; :SOURCE_TYPE: %^{Source Type|newspaper|book|report|article|interview|speech|memo|minutes}
+;; :PUBLICATION: %^{Publication/Publisher}
+;; :CREATOR:  %^{Author/Creator}
+;; :ARCHIVE:  %^{Archive}
+;; :COLLECTION: %^{Collection}
+;; :BOX:      %^{Box}
+;; :FOLDER:   %^{Folder}
+;; :END:
+;;
+;; * Source Information
+;; - Source: %\\1, %\\2, %\\3
+;; - Tropy: %^{Tropy Link (optional)}
+;;
+;; * Content Summary
+;; %^{Brief summary of what this is (who, what, where, when)}
+;;
+;; * Key Excerpts
+;;
+;;
+;; * Themes
+;;
+;;
+;; * People
+;;
+;;
+;; * Organizations
+;;
+;;
+;; * Places
+;;
+;;
+;; * Analysis
+;;
+;;
+;; * Cross-references
+;;
+;;
+;; * Notes
+;; %^{Initial thoughts/questions}
+;;
+;; * Transcription
+;; ** TODO Needs transcription"
+;;          :empty-lines 1)
+;;
+;;         ("p" "Person" plain
+;;          (function org-node-capture-target)
+;;          "#+title: %^{Full Name}
+;; #+filetags: :project/sagebrush:biography:
+;; :PROPERTIES:
+;; :ID:       %(org-id-new)
+;; :DATE_CREATED: %U
+;; :BIRTH_YEAR: %^{Birth Year (if known)}
+;; :DEATH_YEAR: %^{Death Year (if known)}
+;; :OCCUPATION: %^{Primary Occupation}
+;; :LOCATION:  %^{Primary Location/Region}
+;; :END:
+;;
+;; * Biographical Information
+;; %^{Basic biographical details}
+;;
+;; * Role in Research
+;; %^{Why this person matters to your project}
+;;
+;; * Key Relationships
+;; ** Family
+;;
+;;
+;; ** Professional
+;;
+;;
+;; ** Political/Social
+;;
+;;
+;; * Timeline
+;; ** Major Events
+;;
+;;
+;; * Sources Mentioning This Person
+;; %^{Initial sources - more will be added via backlinks}
+;;
+;; * Analysis
+;; %^{Your interpretation of this person's significance}
+;;
+;; * Research Questions
+;; %^{What you want to know more about}"
+;;          :empty-lines 1)
+;;
+;;         ("l" "Letter" plain
+;;          (function org-node-capture-target)
+;;          "#+title: Letter: %^{Sender} to %^{Recipient} - %^{Date}
+;; #+filetags: :project/sagebrush:primary-source:
+;; :PROPERTIES:
+;; :ID:       %(org-id-new)
+;; :DATE_CREATED: %U
+;; :DATE:     %\\3
+;; :SOURCE_TYPE: letter
+;; :LETTER_TYPE: %^{Type|personal|business|official}
+;; :SENDER:   %\\1
+;; :RECIPIENT: %\\2
+;; :ARCHIVE:  %^{Archive}
+;; :COLLECTION: %^{Collection}
+;; :BOX:      %^{Box}
+;; :FOLDER:   %^{Folder}
+;; :END:
+;;
+;; * Source Information
+;; - Source: Letter from %\\1 to %\\2, %\\3
+;; - Tropy: %^{Tropy Link (optional)}
+;;
+;; * Content Summary
+;; %^{Brief summary of letter content}
+;;
+;; * Key Excerpts
+;;
+;;
+;; * Themes
+;;
+;;
+;; * People
+;; - [[%\\1]] (sender)
+;; - [[%\\2]] (recipient)
+;;
+;; * Organizations
+;;
+;;
+;; * Places
+;;
+;;
+;; * Analysis
+;;
+;;
+;; * Cross-references
+;;
+;;
+;; * Notes
+;; %^{Initial thoughts/questions}
+;;
+;; * Transcription
+;; ** TODO Needs transcription"
+;;          :empty-lines 1)
+;;
+;;         ("o" "Organization" plain
+;;          (function org-node-capture-target)
+;;          "#+title: %^{Organization Name}
+;; #+filetags: :project/sagebrush:organization:
+;; :PROPERTIES:
+;; :ID:       %(org-id-new)
+;; :DATE_CREATED: %U
+;; :FOUNDED:  %^{Founded Year (if known)}
+;; :DISSOLVED: %^{Dissolved Year (if applicable)}
+;; :ORG_TYPE: %^{Type|government|business|advocacy|professional|religious|social}
+;; :LOCATION: %^{Headquarters/Primary Location}
+;; :END:
+;;
+;; * Overview
+;; %^{Brief description of the organization}
+;;
+;; * Role in Research
+;; %^{Why this organization matters to your project}
+;;
+;; * Key Leadership
+;; ** Founders
+;;
+;;
+;; ** Important Leaders/Members
+;;
+;;
+;; * Organizational Structure
+;; %^{How was it organized? Departments, branches, etc.}
+;;
+;; * Goals and Activities
+;; ** Stated Mission
+;;
+;;
+;; ** Primary Activities
+;;
+;;
+;; ** Political/Social Positions
+;;
+;;
+;; * Timeline
+;; ** Major Events/Milestones
+;;
+;;
+;; * Sources Mentioning This Organization
+;; %^{Initial sources - more will be added via backlinks}
+;;
+;; * Analysis
+;; %^{Your interpretation of this organization's significance}
+;;
+;; * Research Questions
+;; %^{What you want to know more about}"
+;;          :empty-lines 1)))
+;;
 
 ;; Roam - DISABLED FOR ORG-NODE MIGRATION
 ;; (use-package org-roam
@@ -1738,14 +1815,17 @@ When called without a prefix argument, kill just the current buffer
 
 ;; Eldoc 
 (use-package eldoc
+  :straight nil
   :defer t
   :config
   (global-eldoc-mode))
 
 ;; xref 
+(straight-use-package '(consult-xref-stack :type git :host github
+                                           :repo "brett-lempereur/consult-xref-stack" :branch "main"))
+
 (use-package consult-xref-stack
-  :vc
-  (:url "https://github.com/brett-lempereur/consult-xref-stack" :branch "main")
+  :straight nil
   :bind (:map custom-bindings-map
               ("C-," . consult-xref-stack-backward)
               ("C-." . consult-xref-stack-forward)))
@@ -1885,15 +1965,16 @@ When called without a prefix argument, kill just the current buffer
          ("M-("  . lispy-wrap-round)))
 
 ;; Combobulate
-(use-package combobulate
-  :vc (:url "https://github.com/mickeynp/combobulate"
-            :rev :newest
-            :branch "main")
-  :custom (combobulate-key-prefix "C-c o")
-  :bind (:map combobulate-key-map
-              ("M-a" . combobulate-navigate-beginning-of-defun)
-              ("M-e" . combobulate-navigate-end-of-defun)))
-
+;; (straight-use-package '(combobulate :type git :host github
+;;                                     :repo "mickeynp/combobulate" :branch "main"))
+;;
+;; (use-package combobulate
+;;   :straight nil
+;;   :custom (combobulate-key-prefix "C-c o")
+;;   :bind (:map combobulate-key-map
+;;               ("M-a" . combobulate-navigate-beginning-of-defun)
+;;               ("M-e" . combobulate-navigate-end-of-defun)))
+;;
 ;; LSP 
 (use-package lsp-mode
   :defer t
@@ -2073,6 +2154,7 @@ When called without a prefix argument, kill just the current buffer
   (eros-mode 1))
 
 (use-package python
+  :straight nil
   :interpreter ("python3" . python-mode)
   :defer t
   :config
@@ -2153,6 +2235,110 @@ When called without a prefix argument, kill just the current buffer
   (define-key go-mode-map (kbd "C-c C-t") 'jah/go-run-tests)
   (define-key go-mode-map (kbd "C-c C-r") 'jah/go-run-package))
 
+;; GitHub issues -> org-agenda
+(defvar jah/github-issues-file (concat org-directory "github-issues.org")
+  "Org file where GitHub issues assigned to me are synced.")
+
+(defun jah/sync-github-issues ()
+  "Sync open GitHub issues assigned to me into `jah/github-issues-file',
+grouped by repository."
+  (interactive)
+  (unless (executable-find "gh")
+    (user-error "gh CLI not found; install it with: brew install gh"))
+  (let* ((json-string (shell-command-to-string
+                       "gh search issues --assignee @me --state open --json number,title,url,repository --limit 100"))
+         (issues (json-read-from-string json-string))
+         (by-repo (make-hash-table :test 'equal)))
+    ;; Group issues by repo
+    (seq-do
+     (lambda (issue)
+       (let* ((repo (alist-get 'nameWithOwner (alist-get 'repository issue)))
+              (existing (gethash repo by-repo '())))
+         (puthash repo (cons issue existing) by-repo)))
+     issues)
+    (with-temp-file jah/github-issues-file
+      (insert "#+TITLE: GitHub Issues\n")
+      (insert "#+FILETAGS: :github:\n\n")
+      (let ((repos (sort (hash-table-keys by-repo) #'string<)))
+        (dolist (repo repos)
+          (insert (format "* %s\n" repo))
+          (insert (format "  :PROPERTIES:\n  :CATEGORY: %s\n  :END:\n\n" repo))
+          (dolist (issue (reverse (gethash repo by-repo)))
+            (let* ((number (alist-get 'number issue))
+                   (title  (alist-get 'title issue))
+                   (url    (alist-get 'url issue)))
+              (insert (format "** TODO %s\n" title))
+              (insert (format "   :PROPERTIES:\n   :ISSUE: #%d\n   :REPO: %s\n   :END:\n" number repo))
+              (insert (format "   [[%s][#%d on GitHub]]\n\n" url number)))))))
+    (message "Synced %d GitHub issues across %d repos."
+             (length issues) (hash-table-count by-repo))))
+
+(add-to-list 'org-agenda-files jah/github-issues-file)
+
+(define-key custom-bindings-map (kbd "C-c g s") 'jah/sync-github-issues)
+
+;; Archival sources browser
+(defun jah/browse-archival-sources ()
+  "Open an overview of archival sources organized by date (year → month)."
+  (interactive)
+  (let* ((sources-dir (expand-file-name "~/Documents/notes/sources/"))
+         (files (directory-files sources-dir t "\\.org$"))
+         (items '()))
+    (dolist (file files)
+      (with-temp-buffer
+        (insert-file-contents file nil 1 3000)
+        (let* ((title   (progn (goto-char (point-min))
+                               (when (re-search-forward "^#\\+TITLE: \\(.+\\)$" nil t)
+                                 (match-string 1))))
+               (date    (progn (goto-char (point-min))
+                               (when (re-search-forward "^:DATE: \\(.+\\)$" nil t)
+                                 (string-trim (match-string 1)))))
+               (doctype (progn (goto-char (point-min))
+                               (when (re-search-forward "^:DOCTYPE: \\(.+\\)$" nil t)
+                                 (string-trim (match-string 1))))))
+          (when (and title date (not (string-empty-p date)))
+            (push (list :title title :date date :file file
+                        :doctype (or doctype ""))
+                  items)))))
+    (setq items (sort items (lambda (a b)
+                              (string< (plist-get a :date)
+                                       (plist-get b :date)))))
+    (with-current-buffer (get-buffer-create "*Archival Sources*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (org-mode)
+        (insert "#+TITLE: Archival Sources\n\n")
+        (let ((current-year nil)
+              (current-month nil))
+          (dolist (item items)
+            (let* ((date    (plist-get item :date))
+                   (year    (when (>= (length date) 4) (substring date 0 4)))
+                   (month   (when (>= (length date) 7) (substring date 5 7)))
+                   (title   (plist-get item :title))
+                   (file    (plist-get item :file))
+                   (doctype (plist-get item :doctype)))
+              (unless (equal year current-year)
+                (setq current-year year current-month nil)
+                (insert (format "* %s\n" year)))
+              (when month
+                (unless (equal month current-month)
+                  (setq current-month month)
+                  (insert (format "** %s %s\n" year
+                                  (format-time-string
+                                   "%B"
+                                   (encode-time 0 0 0 1
+                                                (string-to-number month)
+                                                2000))))))
+              (let ((level (if month "***" "**")))
+                (insert (format "%s [[file:%s][%s]]" level file title))
+                (unless (string-empty-p doctype)
+                  (insert (format " /%s/" doctype)))
+                (insert (format " (%s)\n" date))))))
+        (goto-char (point-min))
+        (switch-to-buffer (current-buffer))))))
+
+(define-key custom-bindings-map (kbd "C-c w d s") 'jah/browse-archival-sources)
+
 ;; Writing tools
 (defun jah/org-count-words ()
     "Add word count to each heading property drawer in an Org mode buffer."
@@ -2232,7 +2418,19 @@ When called without a prefix argument, kill just the current buffer
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(package-selected-packages nil))
+ '(org-agenda-files
+   '("/Users/jheppler/Documents/org/github-issues.org"
+     "/Users/jheppler/Documents/org/agenda.org"
+     "/Users/jheppler/Documents/org/archive.org"
+     "/Users/jheppler/Documents/org/calendar.org"
+     "/Users/jheppler/Documents/org/inbox.org"
+     "/Users/jheppler/Documents/org/notes.org"
+     "/Users/jheppler/Documents/org/personal.org"
+     "/Users/jheppler/Documents/org/projects.org"
+     "/Users/jheppler/Documents/org/refile.org"
+     "/Users/jheppler/Documents/org/todo.org"
+     "/Users/jheppler/Documents/org/todos.org"
+     "/Users/jheppler/Documents/org/work.org")))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
