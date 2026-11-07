@@ -134,7 +134,7 @@
 (setq inhibit-startup-message           t       ;; No startup message
       inhibit-startup-echo-area-message t       ;; No startup message in echo area
       inhibit-startup-screen            t       ;; No default startup screen
-      initial-buffer-choice             t       ;; *scratch* is default startup buffer
+      ;; initial-buffer-choice: see Dashboard (enlight)
       initial-major-mode                'fundamental-mode
       ring-bell-function                'ignore ;; No bell
       display-time-default-load-average nil     ;; Don't show me load time
@@ -145,17 +145,13 @@
 (add-to-list 'default-frame-alist     '(fullscreen . maximized))
 ;; (add-hook 'window-setup-hook          'toggle-frame-fullscreen t)  ;; F11
 
+;; Translucent background, opaque text (blur needs the emacs-plus patch)
+(add-to-list 'default-frame-alist '(alpha-background . 70))
+
 (defun toggle-transparency ()
   (interactive)
-  (let ((alpha (frame-parameter nil 'alpha)))
-    (set-frame-parameter
-     nil 'alpha
-     (if (eql (cond ((numberp alpha) alpha)
-                    ((numberp (cdr alpha)) (cdr alpha))
-                    ;; Also handle undocumented (<active> <inactive>) form.
-                    ((numberp (cadr alpha)) (cadr alpha)))
-              100)
-         '(90 . 55) '(100 . 100)))))
+  (set-frame-parameter nil 'alpha-background
+                       (if (eql (frame-parameter nil 'alpha-background) 100) 70 100)))
 (global-set-key (kbd "C-c h t") 'toggle-transparency)
 
 (add-to-list 'default-frame-alist '(internal-border-width . 16))
@@ -204,7 +200,7 @@
     "n"  '(:ignore t :which-key "notes")
     "nn" '(org-capture :which-key "capture new note")
     "nl" '(org-node-insert-link :which-key "insert link")
-    "nf" '(org-node-find-node :which-key "find node")))
+    "nf" '(org-node-find :which-key "find node")))
 
 ;; Programming 
 (setq-default cursor-type 'bar)
@@ -356,6 +352,86 @@
   (mapc 'disable-theme custom-enabled-themes))
 
 (advice-add 'load-theme :before #'disable-custom-themes)
+
+;; Dashboard
+(defvar jah/apple-logo
+  '("                    'c."
+    "                 ,xNMM."
+    "               .OMMMMo"
+    "               OMMM0,"
+    "     .;loddo:' loolloddol;."
+    "   cKMMMMMMMMMMNWMMMMMMMMMM0:"
+    " .KMMMMMMMMMMMMMMMMMMMMMMMWd."
+    " XMMMMMMMMMMMMMMMMMMMMMMMX."
+    ";MMMMMMMMMMMMMMMMMMMMMMMM:"
+    ":MMMMMMMMMMMMMMMMMMMMMMMM:"
+    ".MMMMMMMMMMMMMMMMMMMMMMMMX."
+    " kMMMMMMMMMMMMMMMMMMMMMMMMWd."
+    " .XMMMMMMMMMMMMMMMMMMMMMMMMMMk"
+    "  .XMMMMMMMMMMMMMMMMMMMMMMMMK."
+    "    kMMMMMMMMMMMMMMMMMMMMMMd"
+    "     ;KMMMMMMMWXXWMMMMMMMk."
+    "       .cooc,.    .,coo:."))
+
+;; 1976 rainbow stripes: (last logo line of stripe . color)
+(defvar jah/apple-stripes
+  '((4 . "#61BB46") (7 . "#FDB827") (10 . "#F5821F")
+    (13 . "#E03A3E") (15 . "#963D97") (17 . "#009DDC")))
+
+(defun jah/center-blocks (&rest blocks)
+  "Join string BLOCKS, padding each so they center on the widest one."
+  (let* ((width (lambda (s) (apply #'max (mapcar #'string-width (split-string s "\n")))))
+         (w (apply #'max (mapcar width blocks))))
+    (mapconcat (lambda (b)
+                 (let ((pad (make-string (/ (- w (funcall width b)) 2) ?\s)))
+                   (mapconcat (lambda (l) (concat pad l)) (split-string b "\n") "\n")))
+               blocks "\n\n")))
+
+(defun jah/enlight-content ()
+  (jah/center-blocks
+   (let ((i 0))
+     (mapconcat (lambda (line)
+                  (setq i (1+ i))
+                  (propertize line 'face
+                              `(:foreground ,(cdr (seq-find (lambda (s) (<= i (car s)))
+                                                            jah/apple-stripes)))))
+                jah/apple-logo "\n"))
+   (string-trim-right
+    (enlight-menu
+     '(("Org"
+        ("Day view"     (org-agenda nil "d")                         "a")
+        ("Capture"      org-capture                                  "c")
+        ("Inbox"        (find-file (concat org-directory "inbox.org")) "i")
+        ("Find note"    org-node-find                                "n"))
+       ("Files"
+        ("Recent files" consult-recent-file                          "r")
+        ("Projects"     projectile-switch-project                    "p")
+        ("Bookmarks"    consult-bookmark                             "b"))
+       ("Emacs"
+        ("Elfeed"       elfeed                                       "e")
+        ("Config"       (find-file user-init-file)                   "f")
+        ("Scratch"      scratch-buffer                               "s")))))
+   (propertize (format "%s  ·  Emacs %s  ·  started in %s"
+                       (format-time-string "%A, %B %-d")
+                       emacs-major-version
+                       (emacs-init-time "%.2fs"))
+               'face 'shadow)))
+
+(defun jah/enlight ()
+  "Rebuild and return the dashboard buffer."
+  (require 'enlight)
+  (require 'enlight-menu)
+  (customize-set-variable 'enlight-content (jah/enlight-content))
+  (enlight))
+
+(use-package enlight
+  :init
+  (setq initial-buffer-choice #'jah/enlight)
+  ;; Menu keys are single letters; keep evil out of the dashboard
+  (with-eval-after-load 'evil
+    (evil-set-initial-state 'enlight-mode 'emacs))
+  :config
+  (keymap-set enlight-mode-map "g" (lambda () (interactive) (switch-to-buffer (jah/enlight)))))
 
 ;; Mode line
 (column-number-mode t) ;; Show current column number in mode line
@@ -984,7 +1060,7 @@ When called without a prefix argument, kill just the current buffer
   :defer t)
 
 ;; Try packages 
-(use-package try)
+(use-package try :commands try)
 
 ;; Snippets 
 (use-package yasnippet
@@ -1131,24 +1207,45 @@ When called without a prefix argument, kill just the current buffer
   ;;:hook (org-mode . olivetti-mode) -- not sure I like this yet
 
   :config
-  ;; Resize Org headings
-  (custom-set-faces
-   '(org-document-title ((t (:height 1.2))))
-   '(outline-1          ((t (:height 1.2))))
-   '(outline-2          ((t (:height 1.2))))
-   '(outline-3          ((t (:height 1.2))))
-   '(outline-4          ((t (:height 1.2))))
-   '(outline-5          ((t (:height 1.2))))
-   '(outline-6          ((t (:height 1.2))))
-   '(outline-7          ((t (:height 1.2))))
-   '(outline-8          ((t (:height 1.2))))
-   '(outline-9          ((t (:height 1.2)))))
-  
+  ;; Monospace headings scaled by level; reapplied after theme switches
+  (defun jah/apply-org-heading-faces (&rest _)
+    (set-face-attribute 'org-document-title nil :inherit 'fixed-pitch :weight 'bold :height 1.5)
+    (dotimes (i 8)
+      (set-face-attribute (intern (format "org-level-%d" (1+ i))) nil
+                          :inherit 'fixed-pitch :height 1.2
+                          :weight (pcase i ((or 0 1) 'bold) ((or 2 3) 'semi-bold) (_ 'normal)))))
+  (jah/apply-org-heading-faces)
+  (advice-add 'load-theme :after #'jah/apply-org-heading-faces)
+
+  ;; TAB toggles only the current subtree; S-TAB still cycles the buffer
+  (defun jah/org-cycle-only-current-subtree (&optional arg)
+    (interactive "P")
+    (unless (or (eq this-command 'org-shifttab)
+                (and (bound-and-true-p org-cdlatex-mode)
+                     (or (org-inside-LaTeX-fragment-p)
+                         (org-inside-latex-macro-p))))
+      (save-excursion
+        (org-beginning-of-line)
+        (let (invisible-p)
+          (when (and (org-at-heading-p)
+                     (or org-cycle-open-archived-trees
+                         (not (member org-archive-tag (org-get-tags))))
+                     (or (not arg)
+                         (setq invisible-p
+                               (memq (get-char-property (line-end-position) 'invisible)
+                                     '(outline org-fold-outline)))))
+            (unless invisible-p
+              (setq org-cycle-subtree-status 'subtree))
+            (org-cycle-internal-local)
+            t)))))
+  (add-hook 'org-tab-first-hook #'jah/org-cycle-only-current-subtree)
+  (add-hook 'org-mode-hook (lambda () (setq-local line-spacing 0.1)))
+
 (org-indent-mode -1)
 
 (setq org-startup-with-latex-preview t)
 
-(plist-put org-format-latex-options :scale 1.35)
+(plist-put org-format-latex-options :scale 1.7)
 
 (let ((png (cdr (assoc 'dvipng org-preview-latex-process-alist))))
     (plist-put png :latex-compiler '("latex -interaction nonstopmode -output-directory %o %F"))
@@ -1203,8 +1300,19 @@ When called without a prefix argument, kill just the current buffer
                                           ("WAIT"     . 9744)
                                           ("DROP"     . 9744)
                                           ("QUESTION" . 9744)
-                                          ("DONE"     . 9745)))
-  :hook (org-mode . org-superstar-mode))
+                                          ("DONE"     . 9745))))
+  ;; Disabled while trying org-modern
+  ;; :hook (org-mode . org-superstar-mode))
+
+(use-package org-modern
+  :after org
+  :hook (org-mode . org-modern-mode)
+  :custom
+  (org-modern-hide-stars "  ")
+  (org-modern-fold-stars '(("◉" . "◯")
+                           ("│" . "└")
+                           (" │" . " └")
+                           (" │" . " └"))))
 
 ;; General 
 (add-hook 'org-mode-hook #'(lambda () (electric-indent-local-mode -1)))
