@@ -173,28 +173,33 @@
   ; don't show buffer name in title bar
   (setq frame-title-format ""))
 
-;; evil 
+;; evil
 (use-package evil
-  :straight t
   :init
-  (setq evil-want-integration t)
-  (setq evil-want-keybinding nil)
+  (setq evil-want-integration t
+        evil-want-keybinding nil        ; evil-collection supplies these
+        evil-undo-system 'undo-tree)    ; u / C-r use the global undo-tree
   :config
   (evil-mode 1))
 
 (use-package evil-collection
-  :straight t
   :after evil
   :config
   (evil-collection-init))
+
+(use-package evil-org
+  :after (evil org)
+  :hook (org-mode . evil-org-mode)
+  :config
+  (require 'evil-org-agenda)
+  (evil-org-agenda-set-keys))
 
 (use-package general
   :straight t
   :config
   (general-create-definer my/leader-keys
-    :keymaps '(normal insert visual emacs)
-    :prefix "SPC"
-    :global-prefix "C-SPC")
+    :keymaps 'override
+    :prefix "C-c")
 
   (my/leader-keys
     "n"  '(:ignore t :which-key "notes")
@@ -478,6 +483,7 @@
 ;; Text display 
 (use-package olivetti
   :defer t
+  :bind (:map custom-bindings-map ("C-c o" . olivetti-mode))
   :config
   (setq olivetti-style t)
   :hook (olivetti-mode . (lambda () 
@@ -1517,6 +1523,42 @@ When called without a prefix argument, kill just the current buffer
   (setq org-node-file-slug-fn #'org-node-slugify-like-roam-default)
   (setq org-node-file-timestamp-format "%Y%m%d%H%M%S-")
   (setq org-node-directory "~/Documents/notes"))
+
+;; TESTING: vulpea on converted Obsidian notes (see ~/vulpea-test/obsidian2org.py)
+(use-package vulpea
+  :demand t  ; :bind alone would defer loading, and autosync must start at init
+  :init
+  (setq vulpea-db-sync-directories '("~/vulpea-test/")
+        vulpea-db-async-extraction 'full
+        vulpea-db-parse-method 'single-temp-buffer
+        vulpea-db-index-plain-links nil)
+  :bind (("C-c v f" . vulpea-find)
+         ("C-c v i" . vulpea-insert))
+  :config
+  (vulpea-db-autosync-mode +1))
+
+(use-package consult-vulpea
+  :after vulpea  ; not :after consult, per its README
+  :demand t      ; :bind would otherwise defer it and the preview mode never turns on
+  :bind ("C-c v g" . consult-vulpea-grep)
+  :config
+  (consult-vulpea-mode 1))
+
+(use-package vulpea-ui
+  :bind (("C-c v s" . vulpea-ui-sidebar-toggle)
+         ("C-c v c" . vulpea-ui-collection))
+  :init
+  (setq vulpea-ui-sidebar-position 'right
+        vulpea-ui-sidebar-size 0.33
+        vulpea-ui-collection-views
+        '(("sources" . (:filter (:tags-all ("source") :tags-none ("notecard"))
+                        :columns (title context (meta "date") backlinks)
+                        :sort ("date")))
+          ("notecards" . (:filter (:tags-all ("notecard"))
+                          :columns (title context (meta "note_kind") (meta "theme") backlinks)))
+          ("analysis" . (:filter (:directory "03 Analysis")
+                         :columns (title tags links backlinks)
+                         :sort ("Backlinks" . t))))))
 
 ;; Org Capture Templates
 (setq org-capture-templates
