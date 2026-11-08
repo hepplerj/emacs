@@ -84,9 +84,6 @@
        (load-file custom-file))
      (server-start))))
 
-;; support for org dblocks
-(add-to-list 'load-path "~/.config/emacs/nursery/lisp")
-
 ;; Terminal setup 
 (dirtrack-mode t)
 
@@ -178,7 +175,8 @@
   :init
   (setq evil-want-integration t
         evil-want-keybinding nil        ; evil-collection supplies these
-        evil-undo-system 'undo-tree)    ; u / C-r use the global undo-tree
+        evil-undo-system 'undo-tree     ; u / C-r use the global undo-tree
+        evil-respect-visual-line-mode t) ; j/k/0/$ move by screen line when wrapped (like gj/gk)
   :config
   (evil-mode 1))
 
@@ -204,8 +202,8 @@
   (my/leader-keys
     "n"  '(:ignore t :which-key "notes")
     "nn" '(org-capture :which-key "capture new note")
-    "nl" '(org-node-insert-link :which-key "insert link")
-    "nf" '(org-node-find :which-key "find node")))
+    "nl" '(vulpea-insert :which-key "insert link")
+    "nf" '(vulpea-find :which-key "find note")))
 
 ;; Programming 
 (setq-default cursor-type 'bar)
@@ -407,7 +405,7 @@
         ("Day view"     (org-agenda nil "d")                         "a")
         ("Capture"      org-capture                                  "c")
         ("Inbox"        (find-file (concat org-directory "inbox.org")) "i")
-        ("Find note"    org-node-find                                "n"))
+        ("Find note"    vulpea-find                                  "n"))
        ("Files"
         ("Recent files" consult-recent-file                          "r")
         ("Projects"     projectile-switch-project                    "p")
@@ -798,9 +796,7 @@ When called without a prefix argument, kill just the current buffer
   :bind (:map custom-bindings-map
               ("C-c w p" . projectile-command-map))
   :config
-  (add-to-list 'projectile-project-search-path "~/Dropbox/projects/")
-  (add-to-list 'projectile-project-search-path "~/Dropbox/playground/")
-  (add-to-list 'projectile-project-search-path "~/Documents/writing/")
+  (add-to-list 'projectile-project-search-path "~/work/")
   :init
   (projectile-mode))
 
@@ -1247,8 +1243,6 @@ When called without a prefix argument, kill just the current buffer
   (add-hook 'org-tab-first-hook #'jah/org-cycle-only-current-subtree)
   (add-hook 'org-mode-hook (lambda () (setq-local line-spacing 0.1)))
 
-(org-indent-mode -1)
-
 (setq org-startup-with-latex-preview t)
 
 (plist-put org-format-latex-options :scale 1.7)
@@ -1260,7 +1254,8 @@ When called without a prefix argument, kill just the current buffer
 
 (setq org-startup-folded 'content)
 
-(setq org-adapt-indentation t
+(setq org-adapt-indentation nil   ; files stay flush-left...
+      org-startup-indented t        ; ...org-indent-mode shows text under its heading
       org-hide-leading-stars t
       org-pretty-entities t
       org-ellipsis "  ·")
@@ -1496,34 +1491,6 @@ When called without a prefix argument, kill just the current buffer
   :config
   (setq org-babel-python-command python-shell-interpreter))
 
-;; TESTING: org-node
-(use-package org-mem
-  :defer
-  :config
-  (setq org-mem-do-sync-with-org-id t)
-  (setq org-mem-watch-dirs
-        (list "~/Documents/notes/"))
-  (org-mem-updater-mode))
-
-(use-package org-node
-  :after org
-  :init
-  ;; Optional key bindings
-  (keymap-set global-map "M-o n" org-node-global-prefix-map)
-  (with-eval-after-load 'org
-    (keymap-set org-mode-map "M-o n" org-node-org-prefix-map))
-  :config
-  (org-node-cache-mode)
-  (org-node-backlink-mode)
-  (setq org-node-backlink-aggressive t)
-  (org-node-complete-at-point-mode)
-  (add-hook 'after-save-hook 'org-node-rename-file-by-title)
-  ;; Use regular capture instead of roam capture since we're migrating away from roam
-  (setq org-node-creation-fn #'org-capture)
-  (setq org-node-file-slug-fn #'org-node-slugify-like-roam-default)
-  (setq org-node-file-timestamp-format "%Y%m%d%H%M%S-")
-  (setq org-node-directory "~/Documents/notes"))
-
 ;; TESTING: vulpea on converted Obsidian notes (see ~/vulpea-test/obsidian2org.py)
 (use-package vulpea
   :demand t  ; :bind alone would defer loading, and autosync must start at init
@@ -1561,6 +1528,20 @@ When called without a prefix argument, kill just the current buffer
                          :sort ("Backlinks" . t))))))
 
 ;; Org Capture Templates
+(defvar jah/capture-title nil "Title read by the Synthesis capture, reused in its template.")
+
+(defun jah/vulpea-capture-location ()
+  "Org-capture target: pick a heading in ~/vulpea-test/archives; the entry becomes its child.
+Typing a path that doesn't exist yet (e.g. .../Box 300/Folder X) creates it after confirming."
+  (let* ((org-refile-targets
+          `((,(directory-files "~/vulpea-test/archives/" t "\\.org\\'") :maxlevel . 4)))
+         (org-refile-use-outline-path 'file)
+         (org-outline-path-complete-in-steps nil)
+         (org-refile-allow-creating-parent-nodes 'confirm)
+         (loc (org-refile-get-location "File source under")))
+    (set-buffer (org-capture-target-buffer (nth 1 loc)))
+    (goto-char (or (nth 3 loc) (point-min)))))
+
 (setq org-capture-templates
       '(;; INBOX TASK
         ("t" "Task" entry
@@ -1574,37 +1555,31 @@ When called without a prefix argument, kill just the current buffer
          "* %^{Meeting title}\n:PROPERTIES:\n:CREATED: %U\n:ATTENDEES: %^{Attendees}\n:END:\n\n** Agenda\n%?\n\n** Notes\n\n** Actions\n"
          :tree-type week)
 
+        ;; SOURCES: a heading filed under a repository/collection/box/folder in ~/vulpea-test/archives,
+        ;; with the same `key :: value' metadata as the converted sources
         ;; NEWSPAPER SOURCE
-        ("n" "Newspaper Source" plain
-         (file (lambda () (expand-file-name 
-                           (concat (format-time-string "%Y%m%dT%H%M%S") "--%^{Slug}.org")
-                           "~/Documents/notes/sources/")))
-         ":PROPERTIES:\n:ID: %(shell-command-to-string \"uuidgen\" | tr -d '\\n')\n:CREATED: %U\n:DATE: %^{Date (YYYY-MM-DD)}\n:DOCTYPE: newspaper\n:END:\n#+TITLE: %^{Title}\n#+FILETAGS: :source:clipping:%^{Tags}:\n\n* Document\n:PROPERTIES:\n:PUBLISHER: %^{Publisher}\n:ARCHIVE: %^{Archive}\n:COLLECTION: %^{Collection}\n:BOX: %^{Box}\n:FOLDER: %^{Folder}\n:PDF: [[file:attachments/%^{PDF Name}.pdf]]\n:END:\n\n* Overview\n%?\n\n* Notes\n"
+        ("n" "Newspaper Source" entry (function jah/vulpea-capture-location)
+         "* %^{Headline}  :source:\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:END:\n- source :: %^{Publication}\n- date :: %^{Date (YYYY-MM-DD)}\n- doctype :: newspaper\n\n%?"
          :unnarrowed t)
 
-        ;; CORRESPONDENCE SOURCE
-        ("c" "Correspondence Source" plain
-         (file (lambda () (expand-file-name 
-                           (concat (format-time-string "%Y%m%dT%H%M%S") "--%^{Slug}.org")
-                           "~/Documents/notes/sources/")))
-         ":PROPERTIES:\n:ID: %(shell-command-to-string \"uuidgen\" | tr -d '\\n')\n:CREATED: %U\n:DATE: %^{Date}\n:DOCTYPE: letter\n:END:\n#+TITLE: %^{Subject}\n#+FILETAGS: :source:correspondence:%^{Tags}:\n\n* Document\n:PROPERTIES:\n:FROM: %^{Sender}\n:TO: %^{Recipient}\n:ARCHIVE: %^{Archive}\n:COLLECTION: %^{Collection}\n:BOX: %^{Box}\n:FOLDER: %^{Folder}\n:END:\n\n* Notes\n%?"
+        ;; CORRESPONDENCE SOURCE (title follows the vault convention: Letter from X to Y DATE)
+        ("c" "Correspondence Source" entry (function jah/vulpea-capture-location)
+         "* Letter from %^{From} to %^{To} %^{Date (YYYY-MM-DD)}  :source:\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:END:\n- author :: %\\1\n- recipient :: %\\2\n- date :: %\\3\n- doctype :: letter\n\n%?"
          :unnarrowed t)
 
         ;; GENERAL SOURCE
-        ("s" "General Source" plain
-         (file (lambda () (expand-file-name 
-                           (concat (format-time-string "%Y%m%dT%H%M%S") "--%^{Slug}.org")
-                           "~/Documents/notes/sources/")))
-         ":PROPERTIES:\n:ID: %(shell-command-to-string \"uuidgen\" | tr -d '\\n')\n:CREATED: %U\n:DOCTYPE: %^{Type}\n:END:\n#+TITLE: %^{Title}\n#+FILETAGS: :source:%^{Tags}:\n\n* Document\n:PROPERTIES:\n:LOCATION: %^{Location}\n:END:\n\n* Notes\n%?"
+        ("s" "General Source" entry (function jah/vulpea-capture-location)
+         "* %^{Title}  :source:\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:END:\n- date :: %^{Date (YYYY-MM-DD)}\n- doctype :: %^{Type}\n\n%?"
          :unnarrowed t)
 
-        ;; SYNTHESIS
+        ;; SYNTHESIS: a new analysis note
         ("a" "Synthesis" plain
-         (file (lambda () (expand-file-name 
-                           (concat (format-time-string "%Y%m%dT%H%M%S") "--%^{Slug}.org")
-                           "~/Documents/notes/synthesis/")))
-         ":PROPERTIES:\n:ID: %(shell-command-to-string \"uuidgen\" | tr -d '\\n')\n:CREATED: %U\n:TYPE: synthesis\n:STATUS: seedling\n:END:\n#+TITLE: %^{Concept Name}\n#+FILETAGS: :argument:%^{Tags}:\n\n* The Core Idea\n%?\n\n* Supporting Evidence\n- Link back to your Source Notes here (e.g., [[id:1282FAD5...]] from the Denver Post)\n\n* Related Arguments\n- "
-         :unnarrowed t))) 
+         (file (lambda ()
+                 (setq jah/capture-title (read-string "Concept: "))
+                 (expand-file-name (concat (replace-regexp-in-string "/" "-" jah/capture-title) ".org")
+                                   "~/vulpea-test/03 Analysis/")))
+         ":PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:END:\n#+title: %(identity jah/capture-title)\n#+filetags: :project_sagebrush:argument:\n\n- status :: seedling\n\n%?"
+         :unnarrowed t)))
 
 ;; org-noter
 (setq org-noter-property-doc-file "PDF")
@@ -1899,7 +1874,7 @@ When called without a prefix argument, kill just the current buffer
 ;; Citar to access bibliographies
 (use-package citar
    :custom
-   (citar-bibliography '("~/Documents/Academia/library.bib"))
+   (citar-bibliography '("/Users/jheppler/Library/Mobile Documents/com~apple~CloudDocs/30. Research/library.bib"))
    (citar-notes-paths '("~/Documents/notes/"))
    (citar-open-always-create-notes t)
    (org-cite-insert-processor 'citar)
@@ -2545,11 +2520,10 @@ grouped by repository."
 ;; Writing workflow keybindings under C-c w - MIGRATED TO ORG-NODE
 ;; Note: Some consult-org-roam functions don't have direct org-node equivalents
 ;; Using basic alternatives for now
-(define-key custom-bindings-map (kbd "C-c w d f") 'org-node-find)
-;; (define-key custom-bindings-map (kbd "C-c w d s") 'consult-org-roam-search)  ; No direct equivalent yet
-;; (define-key custom-bindings-map (kbd "C-c w d b") 'consult-org-roam-backlinks)  ; No direct equivalent yet
-;; (define-key custom-bindings-map (kbd "C-c w d l") 'consult-org-roam-forward-links)  ; No direct equivalent yet
-;; (define-key custom-bindings-map (kbd "C-c w d t") 'org-roam-buffer-toggle)  ; Use org-node-backlink-mode instead
+(define-key custom-bindings-map (kbd "C-c w d f") 'vulpea-find)
+(define-key custom-bindings-map (kbd "C-c w d s") 'consult-vulpea-grep)
+(define-key custom-bindings-map (kbd "C-c w d b") 'vulpea-find-backlink)
+(define-key custom-bindings-map (kbd "C-c w d t") 'vulpea-ui-sidebar-toggle)
 
 ;; Citar bibliography keybindings
 (define-key custom-bindings-map (kbd "C-c w b c") 'citar-create-note)
@@ -2559,9 +2533,9 @@ grouped by repository."
 (define-key custom-bindings-map (kbd "C-c w b e") 'citar-open)
 
 ;; Org node operations - MIGRATED FROM ORG-ROAM
-(define-key custom-bindings-map (kbd "C-c w r f") 'org-node-find)
-(define-key custom-bindings-map (kbd "C-c w r i") 'org-node-insert-link)
-;; (define-key custom-bindings-map (kbd "C-c w r t") 'org-roam-tag-add)  ; No direct equivalent in org-node
+(define-key custom-bindings-map (kbd "C-c w r f") 'vulpea-find)
+(define-key custom-bindings-map (kbd "C-c w r i") 'vulpea-insert)
+(define-key custom-bindings-map (kbd "C-c w r t") 'vulpea-buffer-tags-add)
 
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -2608,9 +2582,7 @@ grouped by repository."
 
 ;; Graceful degradation
 (unless (file-writable-p "/Users/jheppler/backups/")
-  (error "Disabling backups because can't write to: /Users/jheppler/backups/")
+  (warn "Disabling backups because can't write to: /Users/jheppler/backups/")
   (setq backup-directory-alist nil)
   (setq make-backup-files nil))
 
-;; Lesson learned
-(add-hook 'after-save-hook #'my-fix-invalid-backup-settings)
