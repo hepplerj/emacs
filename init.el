@@ -1,5 +1,8 @@
 ;;; -*- lexical-binding: t -*-
 
+;; Detect package edits on save instead of running `find' over every repo at startup (~1.2s)
+(setq straight-check-for-modifications '(check-on-save find-when-checking))
+
 (defvar bootstrap-version)
 (let ((bootstrap-file
        (expand-file-name
@@ -404,8 +407,12 @@
      '(("Org"
         ("Day view"     (org-agenda nil "d")                         "a")
         ("Capture"      org-capture                                  "c")
-        ("Inbox"        (find-file (concat org-directory "inbox.org")) "i")
-        ("Find note"    vulpea-find                                  "n"))
+        ("Inbox"        (find-file (concat org-directory "inbox.org")) "i"))
+       ("Research"
+        ("Find note"    vulpea-find                                  "n")
+        ("Sources"      (vulpea-ui-collection "sources")             "S")
+        ("Search notes" consult-vulpea-grep                          "/")
+        ("Carrel"       (browse-url "http://127.0.0.1:5055")         "C"))
        ("Files"
         ("Recent files" consult-recent-file                          "r")
         ("Projects"     projectile-switch-project                    "p")
@@ -1493,12 +1500,14 @@ When called without a prefix argument, kill just the current buffer
 
 ;; TESTING: vulpea on converted Obsidian notes (see ~/vulpea-test/obsidian2org.py)
 (use-package vulpea
-  :demand t  ; :bind alone would defer loading, and autosync must start at init
   :init
   (setq vulpea-db-sync-directories '("~/vulpea-test/")
         vulpea-db-async-extraction 'full
         vulpea-db-parse-method 'single-temp-buffer
         vulpea-db-index-plain-links nil)
+  ;; Load (and start autosync) once Emacs is idle after startup: loading vulpea pulls in org (~1.2s).
+  ;; The :bind keys still load it on demand if pressed sooner.
+  (run-with-idle-timer 1 nil (lambda () (require 'vulpea)))
   :bind (("C-c v f" . vulpea-find)
          ("C-c v i" . vulpea-insert))
   :config
