@@ -1141,7 +1141,9 @@ When called without a prefix argument, kill just the current buffer
 ;; PDF tools 
 (use-package pdf-tools
   :defer t
-  :init (pdf-loader-install)
+  :init
+  (pdf-loader-install)
+  (setq-default pdf-view-display-size 'fit-page)  ; a photographed page, whole, in its window
   :hook ((pdf-view-mode . (lambda () (auto-revert-mode -1)))
          (pdf-view-mode . (lambda () (company-mode -1))))
   :bind (:map pdf-view-mode-map
@@ -1574,6 +1576,25 @@ When called without a prefix argument, kill just the current buffer
     (when (and buffer-file-name (file-in-directory-p buffer-file-name "~/notes/"))
       (git-auto-commit-mode 1)))
   (add-hook 'find-file-hook #'jah/notes-auto-commit))
+
+(defun jah/org-show-scan ()
+  "Show the scan of the source at point (its SCAN property) in a window to the right, keeping
+point in the notes. Run again on another source and the same window switches to its scan."
+  (interactive)
+  (let* ((values (when-let* ((v (org-entry-get nil "SCAN"))) (split-string v "\\]\\] *" t)))
+         (files (delq nil (mapcar (lambda (v) (when (string-match "\\[\\[file:\\([^]]+\\)" v) (match-string 1 v)))
+                                  values)))
+         (file (if (cdr files)
+                   (completing-read "Scan: " files nil t)
+                 (car files))))
+    (unless file (user-error "No scan linked on this heading"))
+    (display-buffer (find-file-noselect file)
+                    '((display-buffer-reuse-mode-window display-buffer-in-direction)
+                      (mode . pdf-view-mode) (direction . right) (window-width . 0.5)))))
+
+(with-eval-after-load 'org
+  (keymap-set org-mode-map "C-c v p" #'jah/org-show-scan)
+  (add-to-list 'org-file-apps '("\\.pdf\\'" . emacs)))  ; C-c C-o on a PDF link opens it in Emacs, not Preview
 
 (use-package vulpea-ui
   :bind (("C-c v s" . vulpea-ui-sidebar-toggle)
