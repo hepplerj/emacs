@@ -1250,7 +1250,7 @@ When called without a prefix argument, kill just the current buffer
   (add-hook 'org-tab-first-hook #'jah/org-cycle-only-current-subtree)
   (add-hook 'org-mode-hook (lambda () (setq-local line-spacing 0.1)))
 
-(setq org-startup-with-latex-preview t)
+(setq org-startup-with-latex-preview nil) ; t re-rendered on every open (1.7s for big note files); C-c C-x C-l previews on demand
 
 (plist-put org-format-latex-options :scale 1.7)
 
@@ -1262,6 +1262,8 @@ When called without a prefix argument, kill just the current buffer
 (setq org-startup-folded 'content)
 
 (setq org-adapt-indentation nil   ; files stay flush-left...
+      ;; type tags describe one heading, not its subtree (keep in sync with NO_INHERIT in obsidian2org.py)
+      org-tags-exclude-from-inheritance '("source" "notecard" "collection" "repository")
       org-startup-indented t        ; ...org-indent-mode shows text under its heading
       org-hide-leading-stars t
       org-pretty-entities t
@@ -1527,11 +1529,15 @@ When called without a prefix argument, kill just the current buffer
   (setq vulpea-ui-sidebar-position 'right
         vulpea-ui-sidebar-size 0.33
         vulpea-ui-collection-views
-        '(("sources" . (:filter (:tags-all ("source") :tags-none ("notecard"))
-                        :columns (title context (meta "date") backlinks)
-                        :sort ("date")))
+        '(("sources" . (:filter (:tags-all ("source"))
+                        :columns (todo title context (property "DATE") backlinks)
+                        :sort ("DATE")))
+          ;; sources still needing processing (TODO; DONE once processed)
+          ("to process" . (:filter (:tags-all ("source") :todo "TODO")
+                           :columns (title context (property "DATE") tags)
+                           :sort ("DATE")))
           ("notecards" . (:filter (:tags-all ("notecard"))
-                          :columns (title context (meta "note_kind") (meta "theme") backlinks)))
+                          :columns (title context (property "NOTE_KIND") (meta "theme") backlinks)))
           ("analysis" . (:filter (:directory "03 Analysis")
                          :columns (title tags links backlinks)
                          :sort ("Backlinks" . t))))))
@@ -1542,6 +1548,7 @@ When called without a prefix argument, kill just the current buffer
 (defun jah/vulpea-capture-location ()
   "Org-capture target: pick a heading in ~/vulpea-test/archives; the entry becomes its child.
 Typing a path that doesn't exist yet (e.g. .../Box 300/Folder X) creates it after confirming."
+  (require 'org-refile)  ; `org-refile-get-location' isn't autoloaded
   (let* ((org-refile-targets
           `((,(directory-files "~/vulpea-test/archives/" t "\\.org\\'") :maxlevel . 4)))
          (org-refile-use-outline-path 'file)
@@ -1568,17 +1575,17 @@ Typing a path that doesn't exist yet (e.g. .../Box 300/Folder X) creates it afte
         ;; with the same `key :: value' metadata as the converted sources
         ;; NEWSPAPER SOURCE
         ("n" "Newspaper Source" entry (function jah/vulpea-capture-location)
-         "* %^{Headline}  :source:\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:END:\n- source :: %^{Publication}\n- date :: %^{Date (YYYY-MM-DD)}\n- doctype :: newspaper\n\n%?"
+         "* TODO %^{Headline}  :newspaper:source:\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:DATE:     %^{Date (YYYY-MM-DD)}\n:END:\n- publication :: %^{Publication}\n\n%?"
          :unnarrowed t)
 
         ;; CORRESPONDENCE SOURCE (title follows the vault convention: Letter from X to Y DATE)
         ("c" "Correspondence Source" entry (function jah/vulpea-capture-location)
-         "* Letter from %^{From} to %^{To} %^{Date (YYYY-MM-DD)}  :source:\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:END:\n- author :: %\\1\n- recipient :: %\\2\n- date :: %\\3\n- doctype :: letter\n\n%?"
+         "* TODO Letter from %^{From} to %^{To} %^{Date (YYYY-MM-DD)}  :letter:source:\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:DATE:     %\\3\n:END:\n- author :: %\\1\n- recipient :: %\\2\n\n%?"
          :unnarrowed t)
 
         ;; GENERAL SOURCE
         ("s" "General Source" entry (function jah/vulpea-capture-location)
-         "* %^{Title}  :source:\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:END:\n- date :: %^{Date (YYYY-MM-DD)}\n- doctype :: %^{Type}\n\n%?"
+         "* TODO %^{Title}  :source:\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:DATE:     %^{Date (YYYY-MM-DD)}\n:END:\n\n%?"
          :unnarrowed t)
 
         ;; SYNTHESIS: a new analysis note
@@ -1924,7 +1931,11 @@ Typing a path that doesn't exist yet (e.g. .../Box 300/Folder X) creates it afte
 ;; Flycheck 
 (use-package flycheck
   :defer t
-  :init (global-flycheck-mode)
+  :init
+  ;; org: flycheck's org-lint checker runs in-process (~0.8s per check on large note files) and
+  ;; breaks on newer org-lint output (line numbers as strings)
+  (setq flycheck-global-modes '(not org-mode))
+  (global-flycheck-mode)
   :bind (:map flycheck-mode-map
               ("C-c ! !" . flycheck-explain-error-at-point))
   :config (setq flycheck-display-errors-function #'ignore))
