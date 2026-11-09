@@ -178,7 +178,7 @@
   :init
   (setq evil-want-integration t
         evil-want-keybinding nil        ; evil-collection supplies these
-        evil-undo-system 'undo-tree     ; u / C-r use the global undo-tree
+        evil-undo-system 'undo-fu       ; u / C-r use undo-fu, same as C-_ / M-_
         evil-respect-visual-line-mode t) ; j/k/0/$ move by screen line when wrapped (like gj/gk)
   :config
   (evil-mode 1))
@@ -456,6 +456,9 @@
 	(:propertize "λ " face font-lock-comment-face)
 	mode-line-frame-identification
 	mode-line-buffer-identification
+	;; word count while writing (olivetti on)
+	(:eval (when (bound-and-true-p olivetti-mode)
+	         (propertize (format "   %d words" (jah/word-count)) 'face 'font-lock-comment-face)))
 
 	;; Version control info
 	(:eval (when-let* ((vc vc-mode))
@@ -491,10 +494,26 @@
   :bind (:map custom-bindings-map ("C-c o" . olivetti-mode))
   :config
   (setq olivetti-style t)
-  :hook (olivetti-mode . (lambda () 
-                           (if olivetti-mode
-                               (text-scale-set 2)
-                             (text-scale-set 0)))))
+  :hook (olivetti-mode . jah/olivetti-writing-look))
+
+(defvar-local jah/olivetti-font-cookies nil)
+(defun jah/olivetti-writing-look ()
+  "Writing look for olivetti buffers: larger text in iA Writer Quattro (as in Obsidian)."
+  (mapc #'face-remap-remove-relative jah/olivetti-font-cookies)
+  (setq jah/olivetti-font-cookies
+        (when olivetti-mode
+          (mapcar (lambda (face) (face-remap-add-relative face :family "iA Writer Quattro V"))
+                  '(default variable-pitch))))
+  (text-scale-set (if olivetti-mode 2 0)))
+
+(defvar-local jah/word-count--cache nil)
+(defun jah/word-count ()
+  "Words in the accessible part of the buffer (so a narrowed section counts alone), cached per edit."
+  ;; ponytail: recounts after every edit; fine for a narrowed draft, slower over a whole large file
+  (let ((key (list (buffer-modified-tick) (point-min) (point-max))))
+    (unless (equal (car jah/word-count--cache) key)
+      (setq jah/word-count--cache (cons key (count-words (point-min) (point-max)))))
+    (cdr jah/word-count--cache)))
 
 (use-package adaptive-wrap
   :defer t
@@ -685,15 +704,13 @@
               ("C-_" . undo-fu-only-undo)
               ("M-_" . undo-fu-only-redo)))
 
-;; Undo Tree
-
-(use-package undo-tree
+;; Persistent undo: undo-fu's history survives restarts (as in Eric's config).
+;; (undo-tree was removed: it never activated, because C-_ is rebound to undo-fu above.)
+(use-package undo-fu-session
+  :demand t
   :config
-  (global-undo-tree-mode)
-  :custom
-  (undo-tree-auto-save-history nil)
-  :bind
-  (("C-c w u" . undo-tree-visualize)))
+  (setq undo-fu-session-incompatible-files '("/COMMIT_EDITMSG\\'" "/git-rebase-todo\\'"))
+  (undo-fu-session-global-mode))
 
 (use-package move-dup
   :bind (:map custom-bindings-map
@@ -965,7 +982,9 @@ When called without a prefix argument, kill just the current buffer
               ("C-x C-b" . consult-buffer)
               ("M-g g"   . consult-goto-line)
               ("M-g t"   . consult-imenu)
-              ("M-g a"   . consult-imenu-multi)))
+              ("M-g a"   . consult-imenu-multi)
+              ("M-g h"   . consult-org-heading)   ; org: jump to a heading by outline path
+              ("M-g o"   . consult-outline)))     ; any outline-style buffer
 
 ;; Imenu 
 (use-package imenu-list
@@ -1098,12 +1117,15 @@ When called without a prefix argument, kill just the current buffer
   (which-key-mode))
 
 ;; Spellcheck 
-;; (use-package jinx
-;;   :hook (emacs-startup . global-jinx-mode)
-;;   :bind (("M-$"   . jinx-correct)
-;;          ("C-M-$" . jinx-languages))
-;;   :config
-;;   (setq jinx-languages "en_GB"))
+(use-package jinx  ; needs enchant + pkg-config (brew); compiles its module on first load
+  :hook ((text-mode . jinx-mode)       ; org and markdown derive from text-mode
+         (prog-mode . jinx-mode))      ; in code, only comments and strings are checked
+  :bind (("M-$"   . jinx-correct)
+         ("C-M-$" . jinx-languages))
+  :init
+  (setq jinx-languages "en_US")
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal 'global "z=" #'jinx-correct)))  ; vim's z=
 
 ;; LaTeX 
 (use-package auctex
@@ -1263,7 +1285,7 @@ When called without a prefix argument, kill just the current buffer
 
 (setq org-adapt-indentation nil   ; files stay flush-left...
       ;; type tags describe one heading, not its subtree (keep in sync with NO_INHERIT in obsidian2org.py)
-      org-tags-exclude-from-inheritance '("source" "notecard" "collection" "repository")
+      org-tags-exclude-from-inheritance '("source" "notecard" "collection" "repository" "bib")
       org-startup-indented t        ; ...org-indent-mode shows text under its heading
       org-hide-leading-stars t
       org-pretty-entities t
@@ -1500,10 +1522,10 @@ When called without a prefix argument, kill just the current buffer
   :config
   (setq org-babel-python-command python-shell-interpreter))
 
-;; TESTING: vulpea on converted Obsidian notes (see ~/vulpea-test/obsidian2org.py)
+;; Notes: Vulpea over ~/notes (converted from the Obsidian vault by ~/notes/obsidian2org.py)
 (use-package vulpea
   :init
-  (setq vulpea-db-sync-directories '("~/vulpea-test/")
+  (setq vulpea-db-sync-directories '("~/notes/")
         vulpea-db-async-extraction 'full
         vulpea-db-parse-method 'single-temp-buffer
         vulpea-db-index-plain-links nil)
@@ -1522,6 +1544,37 @@ When called without a prefix argument, kill just the current buffer
   :config
   (consult-vulpea-mode 1))
 
+(defun jah/vulpea-to-process-p (note)
+  "Sources still needing processing: TODO source headings, or loose source files tagged to_do."
+  (and (or (member "source" (vulpea-note-tags note))
+           (string-match-p "/05 Sources/" (vulpea-note-path note)))
+       (or (equal (vulpea-note-todo note) "TODO")
+           (member "to_do" (vulpea-note-tags note)))))
+
+;; citar finds a work's notes in Vulpea: a note with REFERENCES: @citekey and the bib tag
+(use-package citar-vulpea
+  :straight (citar-vulpea :type git :host github :repo "fabcontigiani/citar-vulpea")  ; newer than the local MELPA recipes
+  :after (citar vulpea)
+  :custom
+  (citar-vulpea-keyword "bib")
+  (citar-vulpea-references-property "REFERENCES")
+  (citar-vulpea-notes-directory "~/notes/readings")
+  (citar-vulpea-note-title-template "${author editor:%etal} (${year issued date}) ${title}")
+  :config
+  (citar-vulpea-mode 1))
+
+;; every save in ~/notes becomes a git commit (after a minute's quiet), so any change can be undone; no push
+(use-package git-auto-commit-mode
+  :commands git-auto-commit-mode
+  :init
+  (setq-default gac-automatically-push-p nil
+                gac-automatically-add-new-files-p t
+                gac-debounce-interval 60)
+  (defun jah/notes-auto-commit ()
+    (when (and buffer-file-name (file-in-directory-p buffer-file-name "~/notes/"))
+      (git-auto-commit-mode 1)))
+  (add-hook 'find-file-hook #'jah/notes-auto-commit))
+
 (use-package vulpea-ui
   :bind (("C-c v s" . vulpea-ui-sidebar-toggle)
          ("C-c v c" . vulpea-ui-collection))
@@ -1533,24 +1586,32 @@ When called without a prefix argument, kill just the current buffer
                         :columns (todo title context (property "DATE") backlinks)
                         :sort ("DATE")))
           ;; sources still needing processing (TODO; DONE once processed)
-          ("to process" . (:filter (:tags-all ("source") :todo "TODO")
+          ("to process" . (:filter (:predicate jah/vulpea-to-process-p)
                            :columns (title context (property "DATE") tags)
                            :sort ("DATE")))
           ("notecards" . (:filter (:tags-all ("notecard"))
                           :columns (title context (property "NOTE_KIND") (meta "theme") backlinks)))
           ("analysis" . (:filter (:directory "03 Analysis")
                          :columns (title tags links backlinks)
-                         :sort ("Backlinks" . t))))))
+                         :sort ("Backlinks" . t)))))
+  :config
+  ;; vulpea-ui's single-letter keys (m, u, t, T, e, /, RET...) are shadowed by evil's normal state,
+  ;; so its buffers start in emacs state; j/k still move like vim in the collection table
+  (with-eval-after-load 'evil
+    (dolist (mode '(vulpea-ui-collection-mode vulpea-ui-sidebar-mode vulpea-ui-schema-dashboard-mode))
+      (evil-set-initial-state mode 'emacs)))
+  (keymap-set vulpea-ui-collection-mode-map "j" #'next-line)
+  (keymap-set vulpea-ui-collection-mode-map "k" #'previous-line))
 
 ;; Org Capture Templates
 (defvar jah/capture-title nil "Title read by the Synthesis capture, reused in its template.")
 
 (defun jah/vulpea-capture-location ()
-  "Org-capture target: pick a heading in ~/vulpea-test/archives; the entry becomes its child.
+  "Org-capture target: pick a heading in ~/notes/archives; the entry becomes its child.
 Typing a path that doesn't exist yet (e.g. .../Box 300/Folder X) creates it after confirming."
   (require 'org-refile)  ; `org-refile-get-location' isn't autoloaded
   (let* ((org-refile-targets
-          `((,(directory-files "~/vulpea-test/archives/" t "\\.org\\'") :maxlevel . 4)))
+          `((,(directory-files "~/notes/archives/" t "\\.org\\'") :maxlevel . 4)))
          (org-refile-use-outline-path 'file)
          (org-outline-path-complete-in-steps nil)
          (org-refile-allow-creating-parent-nodes 'confirm)
@@ -1571,7 +1632,7 @@ Typing a path that doesn't exist yet (e.g. .../Box 300/Folder X) creates it afte
          "* %^{Meeting title}\n:PROPERTIES:\n:CREATED: %U\n:ATTENDEES: %^{Attendees}\n:END:\n\n** Agenda\n%?\n\n** Notes\n\n** Actions\n"
          :tree-type week)
 
-        ;; SOURCES: a heading filed under a repository/collection/box/folder in ~/vulpea-test/archives,
+        ;; SOURCES: a heading filed under a repository/collection/box/folder in ~/notes/archives,
         ;; with the same `key :: value' metadata as the converted sources
         ;; NEWSPAPER SOURCE
         ("n" "Newspaper Source" entry (function jah/vulpea-capture-location)
@@ -1593,7 +1654,7 @@ Typing a path that doesn't exist yet (e.g. .../Box 300/Folder X) creates it afte
          (file (lambda ()
                  (setq jah/capture-title (read-string "Concept: "))
                  (expand-file-name (concat (replace-regexp-in-string "/" "-" jah/capture-title) ".org")
-                                   "~/vulpea-test/03 Analysis/")))
+                                   "~/notes/sagebrush/03 Analysis/")))
          ":PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:END:\n#+title: %(identity jah/capture-title)\n#+filetags: :project_sagebrush:argument:\n\n- status :: seedling\n\n%?"
          :unnarrowed t)))
 
@@ -1891,7 +1952,7 @@ Typing a path that doesn't exist yet (e.g. .../Box 300/Folder X) creates it afte
 (use-package citar
    :custom
    (citar-bibliography '("/Users/jheppler/Library/Mobile Documents/com~apple~CloudDocs/30. Research/library.bib"))
-   (citar-notes-paths '("~/Documents/notes/"))
+   (citar-notes-paths '("~/notes/readings/"))
    (citar-open-always-create-notes t)
    (org-cite-insert-processor 'citar)
    (org-cite-follow-processor 'citar)
@@ -2422,67 +2483,6 @@ grouped by repository."
 
 (define-key custom-bindings-map (kbd "C-c g s") 'jah/sync-github-issues)
 
-;; Archival sources browser
-(defun jah/browse-archival-sources ()
-  "Open an overview of archival sources organized by date (year → month)."
-  (interactive)
-  (let* ((sources-dir (expand-file-name "~/Documents/notes/sources/"))
-         (files (directory-files sources-dir t "\\.org$"))
-         (items '()))
-    (dolist (file files)
-      (with-temp-buffer
-        (insert-file-contents file nil 1 3000)
-        (let* ((title   (progn (goto-char (point-min))
-                               (when (re-search-forward "^#\\+TITLE: \\(.+\\)$" nil t)
-                                 (match-string 1))))
-               (date    (progn (goto-char (point-min))
-                               (when (re-search-forward "^:DATE: \\(.+\\)$" nil t)
-                                 (string-trim (match-string 1)))))
-               (doctype (progn (goto-char (point-min))
-                               (when (re-search-forward "^:DOCTYPE: \\(.+\\)$" nil t)
-                                 (string-trim (match-string 1))))))
-          (when (and title date (not (string-empty-p date)))
-            (push (list :title title :date date :file file
-                        :doctype (or doctype ""))
-                  items)))))
-    (setq items (sort items (lambda (a b)
-                              (string< (plist-get a :date)
-                                       (plist-get b :date)))))
-    (with-current-buffer (get-buffer-create "*Archival Sources*")
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (org-mode)
-        (insert "#+TITLE: Archival Sources\n\n")
-        (let ((current-year nil)
-              (current-month nil))
-          (dolist (item items)
-            (let* ((date    (plist-get item :date))
-                   (year    (when (>= (length date) 4) (substring date 0 4)))
-                   (month   (when (>= (length date) 7) (substring date 5 7)))
-                   (title   (plist-get item :title))
-                   (file    (plist-get item :file))
-                   (doctype (plist-get item :doctype)))
-              (unless (equal year current-year)
-                (setq current-year year current-month nil)
-                (insert (format "* %s\n" year)))
-              (when month
-                (unless (equal month current-month)
-                  (setq current-month month)
-                  (insert (format "** %s %s\n" year
-                                  (format-time-string
-                                   "%B"
-                                   (encode-time 0 0 0 1
-                                                (string-to-number month)
-                                                2000))))))
-              (let ((level (if month "***" "**")))
-                (insert (format "%s [[file:%s][%s]]" level file title))
-                (unless (string-empty-p doctype)
-                  (insert (format " /%s/" doctype)))
-                (insert (format " (%s)\n" date))))))
-        (goto-char (point-min))
-        (switch-to-buffer (current-buffer))))))
-
-(define-key custom-bindings-map (kbd "C-c w d s") 'jah/browse-archival-sources)
 
 ;; Writing tools
 (defun jah/org-count-words ()

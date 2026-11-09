@@ -45,3 +45,4 @@ forge-database.sqlite
 # Temporary backup files
 %backup%~
 /vulpea.db*
+/undo-fu-session/
