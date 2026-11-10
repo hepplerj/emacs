@@ -441,7 +441,12 @@
   (with-eval-after-load 'evil
     (evil-set-initial-state 'enlight-mode 'emacs))
   :config
-  (keymap-set enlight-mode-map "g" (lambda () (interactive) (switch-to-buffer (jah/enlight)))))
+  (keymap-set enlight-mode-map "g" (lambda () (interactive) (switch-to-buffer (jah/enlight))))
+  ;; a blank line between menu sections (enlight has no option for it); ponytail: advises a private
+  ;; function, so revisit if an enlight update changes enlight-menu--insert-section
+  (with-eval-after-load 'enlight-menu
+    (advice-add 'enlight-menu--insert-section :before
+                (lambda (&rest _) (unless (bobp) (insert "\n"))))))
 
 ;; Mode line
 (column-number-mode t) ;; Show current column number in mode line
